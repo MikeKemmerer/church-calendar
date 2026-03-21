@@ -1,0 +1,38 @@
+{
+  "calendars": [
+    {"id": "your-calendar-id-1@group.calendar.google.com", "color": "#333333"},
+    {"id": "your-calendar-id-2@group.calendar.google.com", "color": "#2F6309"},
+    {"id": "usa__en@holiday.calendar.google.com", "color": "#2952A3"}
+  ],
+  "local_files": {
+    "enabled": true,
+    "folder_path": "./images/",
+    "scan_interval": 300,
+    "file_extensions": [".jpg", ".png", ".gif", ".jpeg", ".webp"],
+    "recursive": true
+  },
+  "optimization": {
+    "enabled": true,
+    "quality": 85,
+    "max_width": 1920,
+    "max_height": 1080,
+    "thumbnail_size": 32,
+    "cleanup_orphaned": true,
+    "cleanup_interval": 3600
+  },
+  "calendar": {
+    "refresh_interval": 300,
+    "cache_enabled": true,
+    "cache_file": "calendar_cache.json",
+    "max_events": 100
+  },
+  "display": {
+    "slide_duration": 12,
+    "theme": "classic-gold",
+    // Available themes: "classic-gold", "modern-blue", "elegant-black", "liturgical-purple", "festive-red"
+    "font": "cinzel-lora",
+    // Available fonts: "cinzel-lora", "roboto-open-sans", "playfair-source"
+    "show_images": true,
+    "max_images": 10
+  }
+}

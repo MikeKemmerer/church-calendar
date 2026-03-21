@@ -1,0 +1,15 @@
+church-calendar.code-workspace
+
+# Python
+__pycache__/
+*.pyc
+
+# Runtime caches
+calendar_cache.json
+image_cache.json
+
+# Site-specific config (contains calendar IDs)
+config.json
+
+# Optimized images
+images/optimized/

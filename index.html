@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>St. Demetrios Greek Orthodox Church - Calendar</title>
+    <!-- Self-hosted fonts — no external network dependency -->
+    <style>
+      @font-face {
+        font-family: 'Cinzel';
+        font-style: normal;
+        font-weight: 400 700;
+        font-display: swap;
+        src: url('/fonts/cinzel-latin.woff2') format('woff2');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: 'Cinzel';
+        font-style: normal;
+        font-weight: 400 700;
+        font-display: swap;
+        src: url('/fonts/cinzel-latin-ext.woff2') format('woff2');
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+      }
+      @font-face {
+        font-family: 'Lora';
+        font-style: normal;
+        font-weight: 400 500;
+        font-display: swap;
+        src: url('/fonts/lora-latin.woff2') format('woff2');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: 'Lora';
+        font-style: normal;
+        font-weight: 400 500;
+        font-display: swap;
+        src: url('/fonts/lora-latin-ext.woff2') format('woff2');
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+      }
+      @font-face {
+        font-family: 'Lora';
+        font-style: italic;
+        font-weight: 400;
+        font-display: swap;
+        src: url('/fonts/lora-italic-latin.woff2') format('woff2');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: 'Lora';
+        font-style: italic;
+        font-weight: 400;
+        font-display: swap;
+        src: url('/fonts/lora-italic-latin-ext.woff2') format('woff2');
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+      }
+    </style>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Classic Gold Theme (Default) */
+            --primary-color: #D4A843;
+            --primary-light: #F0DBA8;
+            --primary-dark: #6B5630;
+            --secondary-color: #0C1A2E;
+            --secondary-light: #182D4F;
+            --text-color: #F2F0EB;
+            --text-muted: #9EAFC4;
+            --background-start: #0C1A2E;
+            --background-end: #3D2E12;
+            
+            --dropdown-bg: #0C1A2E;
+            --dropdown-border: #D4A843;
+            --dropdown-text: #F2F0EB;
+            --dropdown-hover-bg: #182D4F;
+            --dropdown-hover-text: #F2F0EB;
+            --dropdown-focus-bg: #D4A843;
+            --dropdown-focus-text: #0C1A2E;
+            
+            /* Theme transition */
+            --transition-speed: 0.3s;
+            
+            --event-card-start: rgba(24, 45, 79, 0.90);
+            --event-card-end: rgba(12, 26, 46, 0.96);
+            --shadow-color: rgba(0, 0, 0, 0.40);
+            --border-color: rgba(212, 168, 67, 0.25);
+            --overlay-color-start: rgba(8, 14, 28, 0.55);
+            --overlay-color-end: rgba(8, 14, 28, 0.82);
+        }
+
+        /* Modern Blue Theme */
+        .theme-modern-blue {
+            --primary-color: #3B82F6;
+            --primary-light: #93BBFD;
+            --primary-dark: #1E3A5F;
+            --secondary-color: #0F172A;
+            --secondary-light: #1E293B;
+            --text-color: #E8EDF4;
+            --text-muted: #94A3B8;
+            --background-start: #0F172A;
+            --background-end: #1A2744;
+            
+            --dropdown-bg: #1E293B;
+            --dropdown-border: #3B82F6;
+            --dropdown-text: #E8EDF4;
+            --dropdown-hover-bg: #334155;
+            --dropdown-hover-text: #E8EDF4;
+            --dropdown-focus-bg: #3B82F6;
+            --dropdown-focus-text: #FFFFFF;
+            
+            --event-card-start: rgba(30, 41, 59, 0.92);
+            --event-card-end: rgba(15, 23, 42, 0.96);
+            --shadow-color: rgba(0, 0, 0, 0.40);
+            --border-color: rgba(59, 130, 246, 0.25);
+            --overlay-color-start: rgba(10, 16, 30, 0.50);
+            --overlay-color-end: rgba(10, 16, 30, 0.78);
+        }
+
+        /* Elegant Black Theme */
+        .theme-elegant-black {
+            --primary-color: #E2B340;
+            --primary-light: #F5DFA0;
+            --primary-dark: #7A5C1A;
+            --secondary-color: #080808;
+            --secondary-light: #171717;
+            --text-color: #F0EDE6;
+            --text-muted: #8C8C8C;
+            --background-start: #080808;
+            --background-end: #1A1408;
+            
+            --dropdown-bg: #171717;
+            --dropdown-border: #E2B340;
+            --dropdown-text: #F0EDE6;
+            --dropdown-hover-bg: #262626;
+            --dropdown-hover-text: #F0EDE6;
+            --dropdown-focus-bg: #E2B340;
+            --dropdown-focus-text: #080808;
+            
+            --event-card-start: rgba(23, 23, 23, 0.94);
+            --event-card-end: rgba(8, 8, 8, 0.98);
+            --shadow-color: rgba(0, 0, 0, 0.50);
+            --border-color: rgba(226, 179, 64, 0.20);
+            --overlay-color-start: rgba(0, 0, 0, 0.50);
+            --overlay-color-end: rgba(0, 0, 0, 0.80);
+        }
+
+        /* Liturgical Purple Theme */
+        .theme-liturgical-purple {
+            --primary-color: #9B72CF;
+            --primary-light: #C9B0E8;
+            --primary-dark: #4A2D6E;
+            --secondary-color: #16102A;
+            --secondary-light: #251E3E;
+            --text-color: #EDE8F5;
+            --text-muted: #A99BC4;
+            --background-start: #16102A;
+            --background-end: #2A1845;
+            
+            --dropdown-bg: #251E3E;
+            --dropdown-border: #9B72CF;
+            --dropdown-text: #EDE8F5;
+            --dropdown-hover-bg: #362A54;
+            --dropdown-hover-text: #EDE8F5;
+            --dropdown-focus-bg: #9B72CF;
+            --dropdown-focus-text: #16102A;
+            
+            --event-card-start: rgba(37, 30, 62, 0.92);
+            --event-card-end: rgba(22, 16, 42, 0.96);
+            --shadow-color: rgba(0, 0, 0, 0.40);
+            --border-color: rgba(155, 114, 207, 0.22);
+            --overlay-color-start: rgba(14, 10, 26, 0.50);
+            --overlay-color-end: rgba(14, 10, 26, 0.80);
+        }
+
+        /* Festive Red Theme */
+        .theme-festive-red {
+            --primary-color: #C43C4C;
+            --primary-light: #E8939C;
+            --primary-dark: #6E1E2A;
+            --secondary-color: #1A0C10;
+            --secondary-light: #2D161C;
+            --text-color: #F5ECEE;
+            --text-muted: #C4A0A8;
+            --background-start: #1A0C10;
+            --background-end: #3A1520;
+            
+            --dropdown-bg: #2D161C;
+            --dropdown-border: #C43C4C;
+            --dropdown-text: #F5ECEE;
+            --dropdown-hover-bg: #3E2028;
+            --dropdown-hover-text: #F5ECEE;
+            --dropdown-focus-bg: #C43C4C;
+            --dropdown-focus-text: #FFFFFF;
+            
+            --event-card-start: rgba(45, 22, 28, 0.92);
+            --event-card-end: rgba(26, 12, 16, 0.96);
+            --shadow-color: rgba(0, 0, 0, 0.40);
+            --border-color: rgba(196, 60, 76, 0.22);
+            --overlay-color-start: rgba(16, 6, 10, 0.50);
+            --overlay-color-end: rgba(16, 6, 10, 0.80);
+        }
+
+        /* Full screen optimized for 720p */
+        html, body {
+            width: 100vw;
+            height: 100vh;
+            min-width: 1280px;
+            min-height: 720px;
+            overflow: hidden;
+            font-family: 'Lora', Georgia, serif;
+            font-size: 15px;
+        }
+
+        @media (min-height: 900px) {
+            html, body {
+                font-size: 16px;
+            }
+        }
+
+        /* Complimentary Gradient Background */
+        .gradient-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background: linear-gradient(135deg, 
+                var(--background-start) 0%, 
+                var(--secondary-light) 40%, 
+                var(--primary-color) 60%, 
+                var(--primary-dark) 100%);
+            opacity: 0.85;
+            transition: background var(--transition-speed) ease;
+        }
+
+        /* Dark overlay for readability */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, var(--overlay-color-start) 0%, var(--overlay-color-end) 100%);
+            z-index: 1;
+        }
+
+        /* Page layout: full screen optimized for 720p */
+        .page {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            min-width: 1280px;
+            min-height: 720px;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem 0;
+        }
+
+        /* Header */
+        .header {
+            height: 4.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0 2rem;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 2rem;
+            font-weight: 600;
+            color: var(--primary-light);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            line-height: 1;
+        }
+
+        .header-subtitle {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+            letter-spacing: 0.12em;
+        }
+
+        /* Main content area */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 0 1.5rem;
+        }
+
+        /* Carousel */
+        .carousel {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .day-slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0;
+            transform: translateX(30px);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .day-slide.active {
+            opacity: 1;
+            transform: translateX(0);
+            pointer-events: auto;
+        }
+
+        .day-slide.exit {
+            opacity: 0;
+            transform: translateX(-30px);
+        }
+
+        /* Day Header */
+        .day-header {
+            text-align: center;
+            padding: 0.4rem 0;
+            flex-shrink: 0;
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .day-name {
+            font-family: 'Cinzel', serif;
+            font-size: 1.65rem;
+            color: var(--primary-light);
+            letter-spacing: 0.12em;
+            line-height: 1;
+        }
+
+        .day-date {
+            font-size: 1.65rem;
+            color: var(--primary-light);
+            line-height: 1;
+        }
+
+        .day-date .year {
+            color: var(--text-muted);
+        }
+
+        /* Events Grid - 2 columns, fills left then right (optimized for Pi Zero 2W) */
+        .events-container {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .events-grid {
+            /* Fallback for older browsers - single column */
+            display: block;
+            height: 100%;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        /* Modern browsers - 2 columns */
+        @supports (column-count: 2) {
+            .events-grid {
+                column-count: 2;
+                column-gap: 0.75rem;
+            }
+        }
+
+        /* Custom scrollbar (optimized) */
+        .events-grid::-webkit-scrollbar { 
+            width: 4px; 
+            height: 4px;
+        }
+        .events-grid::-webkit-scrollbar-track { 
+            background: var(--secondary-light); 
+            border-radius: 2px; 
+        }
+        .events-grid::-webkit-scrollbar-thumb { 
+            background: var(--primary-dark); 
+            border-radius: 2px; 
+        }
+
+        .event-card {
+            background: linear-gradient(135deg, var(--event-card-start), var(--event-card-end));
+            border-radius: 6px;
+            padding: 0.45rem 0.7rem;
+            border-left: 3px solid;
+            box-shadow: 0 2px 8px var(--shadow-color);
+            display: inline-block;
+            width: 100%;
+            margin-bottom: 0.5rem;
+            break-inside: avoid;
+            box-sizing: border-box;
+        }
+        
+
+        .event-time {
+            font-size: 1.1rem;
+            color: var(--primary-color);
+            font-weight: 500;
+            line-height: 1.2;
+        }
+
+        .event-title {
+            font-size: 1.35rem;
+            color: var(--text-color);
+            font-weight: 500;
+            line-height: 1.25;
+        }
+
+        .event-location {
+            font-size: 1.05rem;
+            color: var(--text-muted);
+            margin-top: 0.1rem;
+            font-style: italic;
+            line-height: 1.2;
+        }
+
+        .event-calendar {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 0.05rem;
+            opacity: 0.7;
+            line-height: 1.2;
+        }
+
+        /* No Events Message */
+        .no-events {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* Image Slides */
+        .image-slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0;
+            transform: translateX(30px);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            background: transparent;
+        }
+
+        .image-slide.active {
+            opacity: 1;
+            transform: translateX(0);
+            pointer-events: auto;
+        }
+
+        .image-slide.exit {
+            opacity: 0;
+            transform: translateX(-30px);
+        }
+
+        .image-header {
+            text-align: center;
+            padding: 0.6rem 0 0.5rem;
+            flex-shrink: 0;
+            border-bottom: 1px solid var(--border-color);
+            background: linear-gradient(180deg, var(--overlay-color-start), var(--overlay-color-end));
+        }
+
+        .image-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            letter-spacing: 0.12em;
+            line-height: 1;
+        }
+
+        .image-subtitle {
+            font-size: 1.1rem;
+            color: var(--text-color);
+            margin-top: 0.15rem;
+        }
+
+        .image-subtitle .year {
+            color: var(--text-muted);
+        }
+
+        .image-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            overflow: hidden;
+        }
+
+        .image-content {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 8px 25px var(--shadow-color);
+            border: 2px solid var(--primary-dark);
+        }
+
+        .image-error {
+            color: var(--text-muted);
+            font-style: italic;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        /* Mini Calendar Navigation */
+        .nav-calendar {
+            height: 4.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .nav-day {
+            width: 3.45rem;
+            height: 3.6rem;
+            background: var(--secondary-light);
+            border: 1px solid var(--primary-dark);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0.2rem;
+        }
+
+        .nav-day:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        .nav-day.active {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            transform: scale(1.08);
+        }
+
+        .nav-day.active .nav-day-name,
+        .nav-day.active .nav-day-num {
+            color: var(--secondary-color);
+            font-weight: 700;
+        }
+
+        .nav-day-name {
+            font-family: 'Cinzel', serif;
+            font-size: 0.75rem;
+            color: var(--primary-light);
+            letter-spacing: 0.05em;
+        }
+
+        .nav-day-num {
+            font-size: 1.4rem;
+            color: var(--text-color);
+            font-weight: 500;
+            line-height: 1;
+            margin-top: 0.1rem;
+        }
+
+        .nav-thumbnail {
+            width: 2.1rem;
+            height: 2.1rem;
+            border-radius: 4px;
+            object-fit: cover;
+            margin-bottom: 0.1rem;
+            border: 1px solid var(--primary-dark);
+            background: var(--secondary-light);
+        }
+
+
+        /* Loading State */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 1rem;
+        }
+
+        .loading-spinner {
+            width: 2.5rem;
+            height: 2.5rem;
+            border: 3px solid var(--secondary-light);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 1.5rem;
+        }
+
+        .image-error {
+            color: var(--text-muted);
+            font-style: italic;
+            text-align: center;
+            padding: 2rem;
+            font-size: 1.2rem;
+        }
+
+        /* Options Menu Styles */
+        .options-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-color);
+            border-radius: 50%;
+            width: 2.5rem;
+            height: 2.5rem;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(5px);
+        }
+
+        .options-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .options-menu {
+            position: absolute;
+            top: 3.5rem;
+            right: 1rem;
+            background: rgba(10, 22, 40, 0.95);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            width: 280px;
+            box-shadow: 0 8px 25px var(--shadow-color);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+        }
+
+        .options-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .options-header h3 {
+            font-family: 'Cinzel', serif;
+            font-size: 1.2rem;
+            color: var(--primary-color);
+            letter-spacing: 0.05em;
+            margin: 0;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            width: 1.5rem;
+            height: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+        }
+
+        .options-section {
+            margin-bottom: 1rem;
+        }
+
+        .options-section label {
+            display: block;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 0.4rem;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+        }
+
+        .options-select {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--dropdown-bg);
+            border: 1px solid var(--dropdown-border);
+            border-radius: 4px;
+            color: var(--dropdown-text);
+            font-size: 1.02rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .options-select:hover {
+            border-color: var(--primary-color);
+            background: var(--dropdown-hover-bg);
+            color: var(--dropdown-hover-text);
+        }
+
+        .options-select:focus {
+            outline: none;
+            border-color: var(--dropdown-focus-bg);
+            background: var(--dropdown-focus-bg);
+            color: var(--dropdown-focus-text);
+            box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.3);
+        }
+
+        .options-actions {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .reset-btn {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--primary-color);
+            border: 1px solid var(--primary-dark);
+            border-radius: 4px;
+            color: var(--secondary-color);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            letter-spacing: 0.05em;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+        }
+
+        .reset-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Complimentary Gradient Background -->
+    <div class="gradient-background"></div>
+    <div class="overlay"></div>
+
+    <div class="page">
+        <header class="header">
+            <h1>Saint Demetrios Greek Orthodox Church</h1>
+            <p class="header-subtitle">Upcoming Events &bull; Next 10 Days</p>
+            
+            <!-- Options Menu Button -->
+            <button id="optionsBtn" class="options-btn" aria-label="Display Options" title="Display Options">
+                ⚙️
+            </button>
+            
+            <!-- Options Menu -->
+            <div id="optionsMenu" class="options-menu" style="display: none;">
+                <div class="options-header">
+                    <h3>Display Options</h3>
+                    <button class="close-btn" id="closeOptionsBtn" aria-label="Close Options">✕</button>
+                </div>
+                
+                <div class="options-section">
+                    <label>Theme</label>
+                    <select id="themeSelect" class="options-select">
+                        <option value="classic-gold">Classic Gold (Current)</option>
+                        <option value="modern-blue">Modern Blue</option>
+                        <option value="elegant-black">Elegant Black</option>
+                        <option value="liturgical-purple">Liturgical Purple</option>
+                        <option value="festive-red">Festive Red</option>
+                    </select>
+                </div>
+                
+                <div class="options-section">
+                    <label>Font Style</label>
+                    <select id="fontSelect" class="options-select">
+                        <option value="cinzel-lora">Cinzel + Lora (Current)</option>
+                        <option value="roboto-open-sans">Roboto + Open Sans</option>
+                        <option value="playfair-source">Playfair + Source Sans Pro</option>
+                    </select>
+                </div>
+                
+                <div class="options-section">
+                    <label>Slide Speed</label>
+                    <select id="speedSelect" class="options-select">
+                        <option value="12">Normal (12s)</option>
+                        <option value="18">Slow (18s)</option>
+                    </select>
+                </div>
+                
+                <div class="options-actions">
+                    <button id="resetBtn" class="reset-btn">Reset to Defaults</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div class="carousel" id="carousel">
+                <div class="loading" id="loading">
+                    <div class="loading-spinner"></div>
+                    <p class="loading-text">Loading calendar events...</p>
+                </div>
+            </div>
+            <div class="nav-calendar" id="navCalendar"></div>
+        </div>
+
+    </div>
+
+    <script>
+        // Configuration
+        const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+        const SLIDE_DURATION = 12 * 1000;        // 12 seconds per slide (events or images)
+
+        let events = [];
+        let days = [];
+        let images = [];
+        let mixedContent = []; // Combined array of events and images
+        let currentSlideIndex = 0;
+        let slideTimer = null;
+        let refreshTimer = null;
+
+        const dayNames     = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+        const dayNamesFull = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        const monthNames   = ['January','February','March','April','May','June',
+                              'July','August','September','October','November','December'];
+
+
+        // Text helpers
+        function unescapeIcal(text) {
+            if (!text) return '';
+            return text
+                .replace(/\\,/g, ',')
+                .replace(/\\;/g, ';')
+                .replace(/\\n/gi, ' ')
+                .replace(/\\\\/g, '\\');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function safeText(text) {
+            return escapeHtml(unescapeIcal(text || ''));
+        }
+
+        // Time formatting
+        function formatTime(dateStr) {
+            const date = new Date(dateStr);
+            let h = date.getHours();
+            const m = date.getMinutes();
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            return `${h}:${m < 10 ? '0' + m : m} ${ampm}`;
+        }
+
+        function formatEventTime(event) {
+            if (event.allDay) return 'All Day';
+            const s = new Date(event.start);
+            const e = event.end ? new Date(event.end) : null;
+            if (!e || s.toDateString() !== e.toDateString()) return formatTime(event.start);
+            return `${formatTime(event.start)} – ${formatTime(event.end)}`;
+        }
+
+        // Sort events: all-day first, then by start time
+        function sortEvents(evts) {
+            const len = evts.length;
+            if (len <= 1) return evts.slice();
+            
+            return evts.slice().sort((a, b) => {
+                if (a.allDay !== b.allDay) {
+                    return a.allDay ? -1 : 1;
+                }
+                return a.start.localeCompare(b.start);
+            });
+        }
+
+        // Group events by LOCAL day
+        function groupEventsByDay(evts) {
+            const dayMap = new Map();
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            for (let i = 0; i < 10; i++) {
+                const d = new Date(today);
+                d.setDate(d.getDate() + i);
+                dayMap.set(d.toDateString(), { date: d, events: [] });
+            }
+
+            evts.forEach(ev => {
+                let localMidnight;
+                if (ev.allDay) {
+                    const p = ev.start.split('-');
+                    localMidnight = new Date(+p[0], +p[1] - 1, +p[2]);
+                } else {
+                    const d = new Date(ev.start);
+                    localMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                }
+                const key = localMidnight.toDateString();
+                if (dayMap.has(key)) dayMap.get(key).events.push(ev);
+            });
+
+            dayMap.forEach(day => { day.events = sortEvents(day.events); });
+            return Array.from(dayMap.values());
+        }
+
+        // Build a day slide DOM element
+        function createDaySlide(day, index) {
+            const slide = document.createElement('div');
+            slide.className = 'day-slide' + (index === 0 ? ' active' : '');
+
+            const dayName  = dayNamesFull[day.date.getDay()];
+            const month    = monthNames[day.date.getMonth()];
+            const dayNum   = day.date.getDate();
+            const year     = day.date.getFullYear();
+
+            let cardsHtml = '';
+            if (day.events.length === 0) {
+                cardsHtml = '<div class="no-events">No scheduled events</div>';
+            } else {
+                cardsHtml = day.events.map(ev => `
+                    <div class="event-card" style="border-left-color:${ev.color}">
+                        <div class="event-time">${formatEventTime(ev)}</div>
+                        <div class="event-title">${safeText(ev.summary)}</div>
+                        ${ev.location ? `<div class="event-location">${safeText(ev.location)}</div>` : ''}
+                        ${ev.calendar && ev.calendar !== 'Calendar' ? `<div class="event-calendar">${safeText(ev.calendar)}</div>` : ''}
+                    </div>`).join('');
+            }
+
+            slide.innerHTML = `
+                <div class="day-header">
+                    <span class="day-name">${dayName}</span>
+                    <span class="day-date">${month} ${dayNum}, ${year}</span>
+                </div>
+                <div class="events-container">
+                    <div class="events-grid">${cardsHtml}</div>
+                </div>`;
+
+            return slide;
+        }
+
+        // Navigation
+        function createNavCalendar() {
+            const container = document.getElementById('navCalendar');
+            container.innerHTML = '';
+            
+            mixedContent.forEach((content, i) => {
+                const el = document.createElement('div');
+                el.className = 'nav-day' + (i === currentSlideIndex ? ' active' : '');
+                
+                if (content.type === 'day') {
+                    const day = content.data;
+                    el.innerHTML = `<span class="nav-day-name">${dayNames[day.date.getDay()]}</span>
+                                    <span class="nav-day-num">${day.date.getDate()}</span>`;
+                } else if (content.type === 'image') {
+                    const imageData = content.data;
+                    const thumbnailUrl = imageData.thumbnail || imageData.url;
+                    el.innerHTML = `<img src="${thumbnailUrl}" alt="Image preview" class="nav-thumbnail" onerror="this.style.display='none'; this.parentElement.querySelector('.nav-day-name').textContent='Image';">
+                                    <span class="nav-day-name">Image</span>`;
+                }
+                
+                el.addEventListener('click', () => goToSlide(i));
+                container.appendChild(el);
+            });
+        }
+
+        function updateNavCalendar() {
+            document.querySelectorAll('.nav-day').forEach((el, i) => {
+                el.classList.toggle('active', i === currentSlideIndex);
+            });
+        }
+
+        function goToSlide(index) {
+            if (index < 0 || index >= mixedContent.length || index === currentSlideIndex) return;
+            const slides = document.querySelectorAll('.day-slide, .image-slide');
+            
+            // IMMEDIATELY hide ALL slides to prevent overlap
+            slides.forEach(s => {
+                s.style.display = 'none';
+                s.classList.remove('active');
+                s.classList.remove('exit');
+            });
+            
+            // Show ONLY the target slide
+            currentSlideIndex = index;
+            const targetSlide = slides[currentSlideIndex];
+            targetSlide.style.display = 'flex';
+            targetSlide.classList.add('active');
+            
+            updateNavCalendar();
+            resetSlideTimer();
+        }
+
+        function advanceSlide() {
+            goToSlide((currentSlideIndex + 1) % mixedContent.length);
+        }
+
+        function resetSlideTimer() {
+            if (slideTimer) clearInterval(slideTimer);
+            slideTimer = setInterval(advanceSlide, SLIDE_DURATION);
+        }
+
+        // Periodic cleanup function to prevent any stuck slides
+        function cleanupStuckSlides() {
+            const slides = document.querySelectorAll('.day-slide, .image-slide');
+            const activeSlideIndex = currentSlideIndex;
+            
+            slides.forEach((slide, index) => {
+                if (index !== activeSlideIndex) {
+                    // Force hide any non-active slides that might be stuck
+                    slide.style.display = 'none';
+                    slide.classList.remove('active');
+                    slide.classList.remove('exit');
+                } else {
+                    // Ensure active slide is properly displayed
+                    slide.style.display = 'flex';
+                    slide.classList.add('active');
+                }
+            });
+        }
+
+        // Set up periodic cleanup every 30 seconds as safety net
+        setInterval(cleanupStuckSlides, 30000);
+
+        // Load & render
+        async function loadEvents() {
+            try {
+                const res = await fetch('/api/events');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                events = await res.json();
+                days = groupEventsByDay(events);
+                console.log(`Loaded ${days.length} days of events`);
+                updateMixedContent();
+            } catch (err) {
+                console.error('Error loading events:', err);
+                const loading = document.getElementById('loading');
+                if (loading) loading.innerHTML = '<p class="loading-text">Unable to load calendar. Retrying...</p>';
+            }
+        }
+
+        async function loadImages() {
+            try {
+                const res = await fetch('/api/images');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                images = await res.json();
+                console.log(`Loaded ${images.length} images`);
+                updateMixedContent();
+            } catch (err) {
+                console.error('Error loading images:', err);
+                images = [];
+                updateMixedContent();
+            }
+        }
+
+        // Intelligent Image Distribution
+        function distributeImagesIntelligently() {
+            const totalDays = days.length;
+            const totalImages = images.length;
+            
+            if (totalImages === 0) {
+                return days.map(day => ({
+                    type: 'day',
+                    data: day
+                }));
+            }
+            
+            const result = [];
+            let dayIndex = 0;
+            let imageIndex = 0;
+            
+            const allowConsecutive = totalImages > totalDays;
+            
+            if (allowConsecutive) {
+                const imagesPerDay = Math.ceil(totalImages / totalDays);
+                const baseImages = Math.floor(totalImages / totalDays);
+                let extraImages = totalImages % totalDays;
+                
+                for (let i = 0; i < totalDays; i++) {
+                    result.push({
+                        type: 'day',
+                        data: days[dayIndex++]
+                    });
+                    
+                    for (let j = 0; j < baseImages; j++) {
+                        result.push({
+                            type: 'image',
+                            data: images[imageIndex++]
+                        });
+                    }
+                    
+                    if (extraImages > 0) {
+                        result.push({
+                            type: 'image',
+                            data: images[imageIndex++]
+                        });
+                        extraImages--;
+                    }
+                }
+            } else {
+                const maxAlternating = Math.min(totalDays, totalImages);
+                
+                for (let i = 0; i < maxAlternating; i++) {
+                    result.push({
+                        type: 'day',
+                        data: days[dayIndex++]
+                    });
+                    result.push({
+                        type: 'image',
+                        data: images[imageIndex++]
+                    });
+                }
+                
+                while (dayIndex < totalDays) {
+                    result.push({
+                        type: 'day',
+                        data: days[dayIndex++]
+                    });
+                }
+            }
+            
+            return result;
+        }
+
+        function updateMixedContent() {
+            if (days.length === 0) return;
+            
+            mixedContent = distributeImagesIntelligently();
+            renderCarousel();
+        }
+
+        // Image Slide Creation
+        function createImageSlide(imageData, index) {
+            const slide = document.createElement('div');
+            slide.className = 'image-slide' + (index === 0 ? ' active' : '');
+            
+            slide.innerHTML = `
+                <div class="image-container">
+                    <img src="${imageData.url}" alt="Event Image" class="image-content" loading="lazy" onerror="this.style.display='none'; this.parentElement.classList.add('image-error');">
+                </div>`;
+            
+            return slide;
+        }
+
+        function renderCarousel() {
+            const carousel = document.getElementById('carousel');
+            carousel.innerHTML = '';
+            
+            mixedContent.forEach((content, i) => {
+                if (content.type === 'day') {
+                    carousel.appendChild(createDaySlide(content.data, i));
+                } else if (content.type === 'image') {
+                    carousel.appendChild(createImageSlide(content.data, i));
+                }
+            });
+            
+            createNavCalendar();
+            resetSlideTimer();
+            
+            const loading = document.getElementById('loading');
+            if (loading) {
+                loading.style.display = 'none';
+            }
+        }
+
+        // Debounced resize handler
+        let resizeTimer;
+        function handleResize() {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                if (window.innerWidth < 1280 || window.innerHeight < 720) {
+                    console.log('Screen size changed, layout adjusted');
+                }
+            }, 500);
+        }
+
+        // Options Menu Functionality
+        function initOptionsMenu() {
+            const optionsBtn = document.getElementById('optionsBtn');
+            const optionsMenu = document.getElementById('optionsMenu');
+            const closeBtn = document.getElementById('closeOptionsBtn');
+            const themeSelect = document.getElementById('themeSelect');
+            const fontSelect = document.getElementById('fontSelect');
+            const speedSelect = document.getElementById('speedSelect');
+            const resetBtn = document.getElementById('resetBtn');
+
+            optionsBtn.addEventListener('click', () => {
+                optionsMenu.style.display = optionsMenu.style.display === 'none' ? 'block' : 'none';
+            });
+
+            closeBtn.addEventListener('click', () => {
+                optionsMenu.style.display = 'none';
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!optionsMenu.contains(e.target) && e.target !== optionsBtn) {
+                    optionsMenu.style.display = 'none';
+                }
+            });
+
+            themeSelect.addEventListener('change', (e) => {
+                const theme = e.target.value;
+                document.body.className = '';
+                
+                if (theme === 'modern-blue') {
+                    document.body.classList.add('theme-modern-blue');
+                } else if (theme === 'elegant-black') {
+                    document.body.classList.add('theme-elegant-black');
+                } else if (theme === 'liturgical-purple') {
+                    document.body.classList.add('theme-liturgical-purple');
+                } else if (theme === 'festive-red') {
+                    document.body.classList.add('theme-festive-red');
+                }
+                
+                localStorage.setItem('calendar_theme', theme);
+            });
+
+            fontSelect.addEventListener('change', (e) => {
+                const font = e.target.value;
+                
+                if (font === 'roboto-open-sans') {
+                    document.body.style.fontFamily = 'Roboto, Arial, sans-serif';
+                    const headerH1 = document.querySelector('.header h1');
+                    if (headerH1) headerH1.style.fontFamily = 'Open Sans, Arial, sans-serif';
+                    updateNavigationFonts('Open Sans, Arial, sans-serif', 'Roboto, Arial, sans-serif');
+                } else if (font === 'playfair-source') {
+                    document.body.style.fontFamily = 'Source Sans Pro, Arial, sans-serif';
+                    const headerH1 = document.querySelector('.header h1');
+                    if (headerH1) headerH1.style.fontFamily = 'Playfair Display, Georgia, serif';
+                    updateNavigationFonts('Playfair Display, Georgia, serif', 'Source Sans Pro, Arial, sans-serif');
+                } else {
+                    document.body.style.fontFamily = 'Lora, Georgia, serif';
+                    const headerH1 = document.querySelector('.header h1');
+                    if (headerH1) headerH1.style.fontFamily = 'Cinzel, serif';
+                    updateNavigationFonts('Cinzel, serif', 'Lora, Georgia, serif');
+                }
+                
+                localStorage.setItem('calendar_font', font);
+            });
+
+            speedSelect.addEventListener('change', (e) => {
+                const speed = parseInt(e.target.value);
+                SLIDE_DURATION = speed * 1000;
+                resetSlideTimer();
+                localStorage.setItem('calendar_speed', speed.toString());
+            });
+
+            resetBtn.addEventListener('click', () => {
+                document.body.className = '';
+                themeSelect.value = 'classic-gold';
+                
+                document.body.style.fontFamily = 'Lora, Georgia, serif';
+                const headerH1 = document.querySelector('.header h1');
+                if (headerH1) headerH1.style.fontFamily = 'Cinzel, serif';
+                fontSelect.value = 'cinzel-lora';
+                
+                SLIDE_DURATION = 12 * 1000;
+                speedSelect.value = '12';
+                resetSlideTimer();
+                
+                localStorage.removeItem('calendar_theme');
+                localStorage.removeItem('calendar_font');
+                localStorage.removeItem('calendar_speed');
+                
+                optionsMenu.style.display = 'none';
+            });
+
+            const savedTheme = localStorage.getItem('calendar_theme');
+            const savedFont = localStorage.getItem('calendar_font');
+            const savedSpeed = localStorage.getItem('calendar_speed');
+
+            if (savedTheme) {
+                themeSelect.value = savedTheme;
+                if (savedTheme === 'modern-blue') {
+                    document.body.classList.add('theme-modern-blue');
+                } else if (savedTheme === 'elegant-black') {
+                    document.body.classList.add('theme-elegant-black');
+                } else if (savedTheme === 'liturgical-purple') {
+                    document.body.classList.add('theme-liturgical-purple');
+                } else if (savedTheme === 'festive-red') {
+                    document.body.classList.add('theme-festive-red');
+                }
+            }
+
+            if (savedFont) {
+                fontSelect.value = savedFont;
+                if (savedFont === 'roboto-open-sans') {
+                    document.body.style.fontFamily = 'Roboto, Arial, sans-serif';
+                    const headerH1 = document.querySelector('.header h1');
+                    if (headerH1) headerH1.style.fontFamily = 'Open Sans, Arial, sans-serif';
+                } else if (savedFont === 'playfair-source') {
+                    document.body.style.fontFamily = 'Source Sans Pro, Arial, sans-serif';
+                    const headerH1 = document.querySelector('.header h1');
+                    if (headerH1) headerH1.style.fontFamily = 'Playfair Display, Georgia, serif';
+                }
+            }
+
+            if (savedSpeed) {
+                const speed = parseInt(savedSpeed);
+                SLIDE_DURATION = speed * 1000;
+                speedSelect.value = savedSpeed;
+            }
+        }
+
+        // Update Navigation Fonts
+        function updateNavigationFonts(headerFont, bodyFont) {
+            const navDayNames = document.querySelectorAll('.nav-day-name');
+            navDayNames.forEach(el => {
+                el.style.fontFamily = headerFont;
+            });
+            
+            const navDayNums = document.querySelectorAll('.nav-day-num');
+            navDayNums.forEach(el => {
+                el.style.fontFamily = bodyFont;
+            });
+            
+            const dayNames = document.querySelectorAll('.day-name');
+            dayNames.forEach(el => {
+                el.style.fontFamily = headerFont;
+            });
+            
+            const dayDates = document.querySelectorAll('.day-date');
+            dayDates.forEach(el => {
+                el.style.fontFamily = bodyFont;
+            });
+            
+            const imageTitles = document.querySelectorAll('.image-title');
+            imageTitles.forEach(el => {
+                el.style.fontFamily = headerFont;
+            });
+            
+            const imageSubtitles = document.querySelectorAll('.image-subtitle');
+            imageSubtitles.forEach(el => {
+                el.style.fontFamily = bodyFont;
+            });
+        }
+
+        // ── Init ──────────────────────────────────────────────────────────
+        document.addEventListener('DOMContentLoaded', () => {
+            loadEvents();
+            loadImages();
+            refreshTimer = setInterval(loadEvents, REFRESH_INTERVAL);
+            // Also refresh images periodically
+            setInterval(loadImages, REFRESH_INTERVAL);
+            
+            // Add debounced resize listener
+            window.addEventListener('resize', handleResize);
+            
+            // Initialize options menu
+            initOptionsMenu();
+        });
+    </script>
+</body>
+</html>
