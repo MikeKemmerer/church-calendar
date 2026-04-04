@@ -4,6 +4,7 @@
 import json
 import os
 import urllib.request
+import urllib.parse
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -45,7 +46,7 @@ target = "20260221"
 
 for cal in CALENDARS:
     cal_id = cal["id"]
-    url = f"https://calendar.google.com/calendar/ical/{urllib.request.quote(cal_id, safe='@')}/public/basic.ics"
+    url = f"https://calendar.google.com/calendar/ical/{urllib.parse.quote(cal_id, safe='@')}/public/basic.ics"
     
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -101,7 +102,7 @@ cal_id = CALENDARS[0]["id"] if CALENDARS else ""
 if not cal_id:
     logger.error("No calendars configured for RRULE check")
     raise SystemExit(1)
-url = f"https://calendar.google.com/calendar/ical/{urllib.request.quote(cal_id, safe='@')}/public/basic.ics"
+url = f"https://calendar.google.com/calendar/ical/{urllib.parse.quote(cal_id, safe='@')}/public/basic.ics"
 req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
 with urllib.request.urlopen(req, timeout=15) as response:
     ical_text = response.read().decode("utf-8", errors="replace")
