@@ -596,7 +596,7 @@ def fetch_calendar_events():
     for cal in CALENDARS:
         cal_id = cal["id"]
         color = cal["color"]
-        url = f"https://calendar.google.com/calendar/ical/{urllib.request.quote(cal_id, safe='@')}/public/basic.ics"
+        url = f"https://calendar.google.com/calendar/ical/{urllib.parse.quote(cal_id, safe='@')}/public/basic.ics"
         
         try:
             req = urllib.request.Request(url, headers={
@@ -841,6 +841,8 @@ def main():
         def _deferred_calendar_retry():
             global CALENDAR_CACHE_INSTANCE
             try:
+                if CALENDAR_CACHE_INSTANCE is None:
+                    return
                 CALENDAR_CACHE_INSTANCE.cache = []
                 events = CALENDAR_CACHE_INSTANCE.fetch_calendar_events()
                 if events:
