@@ -95,7 +95,7 @@ class CalendarCache:
             cache_time = datetime.fromisoformat(cache_data["timestamp"])
             age_hours = (datetime.now() - cache_time).total_seconds() / 3600
             return age_hours < self.config["cache_ttl_hours"]
-        except:
+        except Exception:
             return False
     
     def _get_pacific_offset(self, dt):

@@ -218,18 +218,18 @@ def expand_recurring_event(start_dt, end_dt, is_all_day, rrule, now, end_range, 
             elif key == "INTERVAL":
                 try:
                     interval = int(value)
-                except:
+                except Exception:
                     interval = 1
             elif key == "COUNT":
                 try:
                     count = int(value)
-                except:
+                except Exception:
                     count = None
             elif key == "UNTIL":
                 try:
                     until = datetime.strptime(value[:8], "%Y%m%d")
                     until = until.replace(tzinfo=timezone.utc)
-                except:
+                except Exception:
                     until = None
             elif key == "BYDAY":
                 byday = parse_byday(value)
@@ -753,7 +753,7 @@ class CalendarHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             
             logger.info("api_events_fetch_start")
-            events = fetch_calendar_events()
+            events = fetch_cached_calendar_events()
             logger.info(f"api_events_fetch_complete events={len(events)}")
             
             self.wfile.write(json.dumps(events).encode("utf-8"))
@@ -873,18 +873,8 @@ def main():
         logger.info("image_functionality_disabled")
     
     logger.info("performance_optimizations images_startup=true calendar_cached=true network_periodic=false")
-    
+
     try:
-        # Pass optimization systems to handler
-        handler_class = CalendarHandler
-        if IMAGE_SOURCES_AVAILABLE:
-            handler_class = lambda *args, **kwargs: CalendarHandler(*args, image_manager=image_manager, **kwargs)
-        
-        # Add optimized images directory to serve static files
-        import os
-        import http.server
-        import socketserver
-        
         # Custom handler to serve optimized images and thumbnails
         class OptimizedImageHandler(CalendarHandler):
             def do_GET(self):
@@ -919,13 +909,12 @@ def main():
                         self.send_error(404, 'File not found')
                         return
                 super().do_GET()
-        
-        # Use the optimized handler
+
         if IMAGE_SOURCES_AVAILABLE:
             handler_class = lambda *args, **kwargs: OptimizedImageHandler(*args, image_manager=image_manager, **kwargs)
         else:
             handler_class = OptimizedImageHandler
-        
+
         with http.server.HTTPServer(("", PORT), handler_class) as httpd:
             httpd.serve_forever()
     except KeyboardInterrupt:
