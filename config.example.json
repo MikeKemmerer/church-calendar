@@ -1,7 +1,10 @@
 {
   "calendars": [
-    {"id": "your-calendar-id-1@group.calendar.google.com", "color": "#333333"},
-    {"id": "your-calendar-id-2@group.calendar.google.com", "color": "#2F6309"},
+    {"id": "your-services-calendar-id@group.calendar.google.com", "color": "#333333"},
+    {"id": "your-events-calendar-id@group.calendar.google.com", "color": "#2F6309"},
+    {"id": "your-funerals-calendar-id@group.calendar.google.com", "color": "#4A4A4A"},
+    {"id": "your-baptisms-calendar-id@group.calendar.google.com", "color": "#1A73E8"},
+    {"id": "your-weddings-calendar-id@group.calendar.google.com", "color": "#D4AF37"},
     {"id": "usa__en@holiday.calendar.google.com", "color": "#2952A3"}
   ],
   "local_files": {
