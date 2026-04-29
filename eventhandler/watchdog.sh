@@ -1,8 +1,9 @@
 #!/bin/bash
 
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 SOCK="/tmp/vlc.sock"
-HANDLER_DOWN="/path/to/handler-down.sh"
-HANDLER_UP="/path/to/handler-up.sh"
+HANDLER_DOWN="$SCRIPT_DIR/handler-down.sh"
+HANDLER_UP="$SCRIPT_DIR/handler-up.sh"
 COMPONENT="church-calendar.eventhandler-watchdog"
 
 log() {

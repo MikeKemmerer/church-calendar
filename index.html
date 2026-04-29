@@ -922,7 +922,7 @@
     <script>
         // Configuration
         const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
-        const SLIDE_DURATION = 12 * 1000;        // 12 seconds per slide (events or images)
+        let SLIDE_DURATION = 12 * 1000;           // 12 seconds per slide (events or images)
 
         let events = [];
         let days = [];
@@ -1258,6 +1258,7 @@
         function renderCarousel() {
             const carousel = document.getElementById('carousel');
             carousel.innerHTML = '';
+            currentSlideIndex = 0;
             
             mixedContent.forEach((content, i) => {
                 if (content.type === 'day') {
