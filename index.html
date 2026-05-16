@@ -140,10 +140,22 @@
             --overlay-color-start: rgba(8, 14, 28, 0.55);
             --overlay-color-end: rgba(8, 14, 28, 0.82);
             --edge-margin-scale: 1;
+            --font-body: 'Lora', Georgia, serif;
+            --font-heading: 'Cinzel', serif;
         }
 
         .large-margins {
             --edge-margin-scale: 1.5;
+        }
+
+        .font-roboto-open-sans {
+            --font-body: 'Roboto', Arial, sans-serif;
+            --font-heading: 'Open Sans', Arial, sans-serif;
+        }
+
+        .font-playfair-source {
+            --font-body: 'Nunito Sans', Arial, sans-serif;
+            --font-heading: 'Nunito', Arial, sans-serif;
         }
 
         /* Modern Blue Theme */
@@ -293,7 +305,7 @@
             min-width: 1280px;
             min-height: 720px;
             overflow: hidden;
-            font-family: 'Lora', Georgia, serif;
+            font-family: var(--font-body);
             font-size: 15px;
         }
 
@@ -357,7 +369,7 @@
         }
 
         .header h1 {
-            font-family: 'Cinzel', serif;
+            font-family: var(--font-heading);
             font-size: 2rem;
             font-weight: 600;
             color: var(--primary-light);
@@ -426,7 +438,7 @@
         }
 
         .day-name {
-            font-family: 'Cinzel', serif;
+            font-family: var(--font-heading);
             font-size: 1.65rem;
             color: var(--primary-light);
             letter-spacing: 0.12em;
@@ -567,7 +579,7 @@
         }
 
         .image-title {
-            font-family: 'Cinzel', serif;
+            font-family: var(--font-heading);
             font-size: 1.5rem;
             color: var(--primary-color);
             letter-spacing: 0.12em;
@@ -653,7 +665,7 @@
         }
 
         .nav-day-name {
-            font-family: 'Cinzel', serif;
+            font-family: var(--font-heading);
             font-size: 0.75rem;
             color: var(--primary-light);
             letter-spacing: 0.05em;
@@ -1315,6 +1327,32 @@
             }, 500);
         }
 
+        function applyThemeClass(theme) {
+            document.body.classList.remove('theme-modern-blue', 'theme-elegant-black', 'theme-liturgical-purple', 'theme-festive-red', 'theme-light');
+
+            if (theme === 'modern-blue') {
+                document.body.classList.add('theme-modern-blue');
+            } else if (theme === 'elegant-black') {
+                document.body.classList.add('theme-elegant-black');
+            } else if (theme === 'liturgical-purple') {
+                document.body.classList.add('theme-liturgical-purple');
+            } else if (theme === 'festive-red') {
+                document.body.classList.add('theme-festive-red');
+            } else if (theme === 'light') {
+                document.body.classList.add('theme-light');
+            }
+        }
+
+        function applyFontClass(font) {
+            document.body.classList.remove('font-roboto-open-sans', 'font-playfair-source');
+
+            if (font === 'roboto-open-sans') {
+                document.body.classList.add('font-roboto-open-sans');
+            } else if (font === 'playfair-source') {
+                document.body.classList.add('font-playfair-source');
+            }
+        }
+
         // Options Menu Functionality
         function initOptionsMenu() {
             const optionsBtn = document.getElementById('optionsBtn');
@@ -1342,42 +1380,14 @@
 
             themeSelect.addEventListener('change', (e) => {
                 const theme = e.target.value;
-                document.body.className = '';
-                
-                if (theme === 'modern-blue') {
-                    document.body.classList.add('theme-modern-blue');
-                } else if (theme === 'elegant-black') {
-                    document.body.classList.add('theme-elegant-black');
-                } else if (theme === 'liturgical-purple') {
-                    document.body.classList.add('theme-liturgical-purple');
-                } else if (theme === 'festive-red') {
-                    document.body.classList.add('theme-festive-red');
-                } else if (theme === 'light') {
-                    document.body.classList.add('theme-light');
-                }
+                applyThemeClass(theme);
                 
                 localStorage.setItem('calendar_theme', theme);
             });
 
             fontSelect.addEventListener('change', (e) => {
                 const font = e.target.value;
-                
-                if (font === 'roboto-open-sans') {
-                    document.body.style.fontFamily = 'Roboto, Arial, sans-serif';
-                    const headerH1 = document.querySelector('.header h1');
-                    if (headerH1) headerH1.style.fontFamily = 'Open Sans, Arial, sans-serif';
-                    updateNavigationFonts('Open Sans, Arial, sans-serif', 'Roboto, Arial, sans-serif');
-                } else if (font === 'playfair-source') {
-                    document.body.style.fontFamily = 'Nunito Sans, Arial, sans-serif';
-                    const headerH1 = document.querySelector('.header h1');
-                    if (headerH1) headerH1.style.fontFamily = 'Nunito, Arial, sans-serif';
-                    updateNavigationFonts('Nunito, Arial, sans-serif', 'Nunito Sans, Arial, sans-serif');
-                } else {
-                    document.body.style.fontFamily = 'Lora, Georgia, serif';
-                    const headerH1 = document.querySelector('.header h1');
-                    if (headerH1) headerH1.style.fontFamily = 'Cinzel, serif';
-                    updateNavigationFonts('Cinzel, serif', 'Lora, Georgia, serif');
-                }
+                applyFontClass(font);
                 
                 localStorage.setItem('calendar_font', font);
             });
@@ -1402,10 +1412,6 @@
             resetBtn.addEventListener('click', () => {
                 document.body.className = '';
                 themeSelect.value = 'classic-gold';
-                
-                document.body.style.fontFamily = 'Lora, Georgia, serif';
-                const headerH1 = document.querySelector('.header h1');
-                if (headerH1) headerH1.style.fontFamily = 'Cinzel, serif';
                 fontSelect.value = 'cinzel-lora';
                 
                 SLIDE_DURATION = 12 * 1000;
@@ -1430,30 +1436,12 @@
 
             if (savedTheme) {
                 themeSelect.value = savedTheme;
-                if (savedTheme === 'modern-blue') {
-                    document.body.classList.add('theme-modern-blue');
-                } else if (savedTheme === 'elegant-black') {
-                    document.body.classList.add('theme-elegant-black');
-                } else if (savedTheme === 'liturgical-purple') {
-                    document.body.classList.add('theme-liturgical-purple');
-                } else if (savedTheme === 'festive-red') {
-                    document.body.classList.add('theme-festive-red');
-                } else if (savedTheme === 'light') {
-                    document.body.classList.add('theme-light');
-                }
+                applyThemeClass(savedTheme);
             }
 
             if (savedFont) {
                 fontSelect.value = savedFont;
-                if (savedFont === 'roboto-open-sans') {
-                    document.body.style.fontFamily = 'Roboto, Arial, sans-serif';
-                    const headerH1 = document.querySelector('.header h1');
-                    if (headerH1) headerH1.style.fontFamily = 'Open Sans, Arial, sans-serif';
-                } else if (savedFont === 'playfair-source') {
-                    document.body.style.fontFamily = 'Nunito Sans, Arial, sans-serif';
-                    const headerH1 = document.querySelector('.header h1');
-                    if (headerH1) headerH1.style.fontFamily = 'Nunito, Arial, sans-serif';
-                }
+                applyFontClass(savedFont);
             }
 
             if (savedSpeed) {
@@ -1466,39 +1454,6 @@
                 document.body.classList.add('large-margins');
                 largeMarginsCheckbox.checked = true;
             }
-        }
-
-        // Update Navigation Fonts
-        function updateNavigationFonts(headerFont, bodyFont) {
-            const navDayNames = document.querySelectorAll('.nav-day-name');
-            navDayNames.forEach(el => {
-                el.style.fontFamily = headerFont;
-            });
-            
-            const navDayNums = document.querySelectorAll('.nav-day-num');
-            navDayNums.forEach(el => {
-                el.style.fontFamily = bodyFont;
-            });
-            
-            const dayNames = document.querySelectorAll('.day-name');
-            dayNames.forEach(el => {
-                el.style.fontFamily = headerFont;
-            });
-            
-            const dayDates = document.querySelectorAll('.day-date');
-            dayDates.forEach(el => {
-                el.style.fontFamily = bodyFont;
-            });
-            
-            const imageTitles = document.querySelectorAll('.image-title');
-            imageTitles.forEach(el => {
-                el.style.fontFamily = headerFont;
-            });
-            
-            const imageSubtitles = document.querySelectorAll('.image-subtitle');
-            imageSubtitles.forEach(el => {
-                el.style.fontFamily = bodyFont;
-            });
         }
 
         // ── Init ──────────────────────────────────────────────────────────
