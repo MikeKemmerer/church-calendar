@@ -139,6 +139,11 @@
             --border-color: rgba(212, 168, 67, 0.25);
             --overlay-color-start: rgba(8, 14, 28, 0.55);
             --overlay-color-end: rgba(8, 14, 28, 0.82);
+            --edge-margin-scale: 1;
+        }
+
+        .large-margins {
+            --edge-margin-scale: 1.5;
         }
 
         /* Modern Blue Theme */
@@ -336,7 +341,7 @@
             min-height: 720px;
             display: flex;
             flex-direction: column;
-            padding: 1rem 0;
+            padding: calc(1rem * var(--edge-margin-scale)) 0;
         }
 
         /* Header */
@@ -346,7 +351,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 0 2rem;
+            padding: 0 calc(2rem * var(--edge-margin-scale));
             border-bottom: 1px solid var(--border-color);
             flex-shrink: 0;
         }
@@ -374,7 +379,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            padding: 0 1.5rem;
+            padding: 0 calc(1.5rem * var(--edge-margin-scale));
         }
 
         /* Carousel */
@@ -823,6 +828,21 @@
             box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.3);
         }
 
+        .options-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--dropdown-text);
+            font-size: 1rem;
+        }
+
+        .options-checkbox input[type="checkbox"] {
+            width: 1rem;
+            height: 1rem;
+            accent-color: var(--primary-color);
+            cursor: pointer;
+        }
+
         .options-actions {
             margin-top: 1rem;
             padding-top: 1rem;
@@ -899,6 +919,13 @@
                         <option value="12">Normal (12s)</option>
                         <option value="18">Slow (18s)</option>
                     </select>
+                </div>
+
+                <div class="options-section">
+                    <label class="options-checkbox" for="largeMarginsCheckbox">
+                        <input type="checkbox" id="largeMarginsCheckbox">
+                        Large Margins
+                    </label>
                 </div>
                 
                 <div class="options-actions">
@@ -1296,6 +1323,7 @@
             const themeSelect = document.getElementById('themeSelect');
             const fontSelect = document.getElementById('fontSelect');
             const speedSelect = document.getElementById('speedSelect');
+            const largeMarginsCheckbox = document.getElementById('largeMarginsCheckbox');
             const resetBtn = document.getElementById('resetBtn');
 
             optionsBtn.addEventListener('click', () => {
@@ -1361,6 +1389,16 @@
                 localStorage.setItem('calendar_speed', speed.toString());
             });
 
+            largeMarginsCheckbox.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    document.body.classList.add('large-margins');
+                    localStorage.setItem('calendar_large_margins', 'true');
+                } else {
+                    document.body.classList.remove('large-margins');
+                    localStorage.removeItem('calendar_large_margins');
+                }
+            });
+
             resetBtn.addEventListener('click', () => {
                 document.body.className = '';
                 themeSelect.value = 'classic-gold';
@@ -1373,10 +1411,14 @@
                 SLIDE_DURATION = 12 * 1000;
                 speedSelect.value = '12';
                 resetSlideTimer();
+
+                document.body.classList.remove('large-margins');
+                largeMarginsCheckbox.checked = false;
                 
                 localStorage.removeItem('calendar_theme');
                 localStorage.removeItem('calendar_font');
                 localStorage.removeItem('calendar_speed');
+                localStorage.removeItem('calendar_large_margins');
                 
                 optionsMenu.style.display = 'none';
             });
@@ -1384,6 +1426,7 @@
             const savedTheme = localStorage.getItem('calendar_theme');
             const savedFont = localStorage.getItem('calendar_font');
             const savedSpeed = localStorage.getItem('calendar_speed');
+            const savedLargeMargins = localStorage.getItem('calendar_large_margins');
 
             if (savedTheme) {
                 themeSelect.value = savedTheme;
@@ -1417,6 +1460,11 @@
                 const speed = parseInt(savedSpeed);
                 SLIDE_DURATION = speed * 1000;
                 speedSelect.value = savedSpeed;
+            }
+
+            if (savedLargeMargins === 'true') {
+                document.body.classList.add('large-margins');
+                largeMarginsCheckbox.checked = true;
             }
         }
 
