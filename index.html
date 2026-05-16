@@ -1108,8 +1108,7 @@
                 } else if (content.type === 'image') {
                     const imageData = content.data;
                     const thumbnailUrl = imageData.thumbnail || imageData.url;
-                    el.innerHTML = `<img src="${thumbnailUrl}" alt="Image preview" class="nav-thumbnail" onerror="this.style.display='none'; this.parentElement.querySelector('.nav-day-name').textContent='Image';">
-                                    <span class="nav-day-name">Image</span>`;
+                    el.innerHTML = `<img src="${thumbnailUrl}" alt="Image preview" class="nav-thumbnail" onerror="this.style.display='none';">`;
                 }
                 
                 el.addEventListener('click', () => goToSlide(i));
