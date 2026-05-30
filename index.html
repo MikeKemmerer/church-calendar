@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>St. Demetrios Greek Orthodox Church - Calendar</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23192231'/%3E%3Cpath d='M16 4v24M8 12h16' stroke='%23D4A843' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
     <!-- Self-hosted fonts — no external network dependency -->
     <style>
       @font-face {
@@ -145,7 +146,7 @@
         }
 
         .large-margins {
-            --edge-margin-scale: 2;
+            --edge-margin-scale: 2.5;
         }
 
         .font-roboto-open-sans {
@@ -435,20 +436,17 @@
             align-items: baseline;
             justify-content: center;
             gap: 0.5rem;
-        }
-
-        .day-name {
             font-family: var(--font-heading);
             font-size: 1.65rem;
             color: var(--primary-light);
-            letter-spacing: 0.12em;
             line-height: 1;
         }
 
+        .day-name {
+            letter-spacing: 0.12em;
+        }
+
         .day-date {
-            font-size: 1.65rem;
-            color: var(--primary-light);
-            line-height: 1;
         }
 
         .day-date .year {

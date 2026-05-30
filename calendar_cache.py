@@ -43,7 +43,7 @@ CALENDARS = _load_calendars()
 # Cache configuration
 CACHE_CONFIG = {
     "cache_file": "calendar_cache.json",
-    "cache_ttl_hours": 24,  # Cache for 24 hours
+    "cache_ttl_hours": 20,  # Cache for 20 hours
     "fetch_timeout": 15  # Timeout for calendar fetches
 }
 
@@ -53,6 +53,7 @@ class CalendarCache:
     def __init__(self):
         self.config = CACHE_CONFIG
         self.cache_file = self.config["cache_file"]
+        self._cache_time = None
         self.cache = self._load_cache()
     
     def _load_cache(self):
@@ -63,10 +64,12 @@ class CalendarCache:
                     data = json.load(f)
                     # Check if cache is still valid
                     if self._is_cache_valid(data):
+                        self._cache_time = datetime.fromisoformat(data["timestamp"])
                         logger.info(f"Loaded calendar cache from {self.cache_file}")
                         return data["events"]
                     else:
                         logger.info("Calendar cache expired, will fetch fresh data")
+                        self._delete_cache_file()
             except Exception as e:
                 logger.warning(f"Failed to load calendar cache: {e}")
         return []
@@ -74,16 +77,27 @@ class CalendarCache:
     def _save_cache(self, events):
         """Save calendar cache to file"""
         try:
+            now = datetime.now()
             cache_data = {
                 "events": events,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": now.isoformat(),
                 "source": "Google Calendar API"
             }
             with open(self.cache_file, 'w') as f:
                 json.dump(cache_data, f, indent=2)
+            self._cache_time = now
             logger.info(f"Saved calendar cache to {self.cache_file}")
         except Exception as e:
             logger.error(f"Failed to save calendar cache: {e}")
+
+    def _delete_cache_file(self):
+        """Remove stale cache file from disk"""
+        try:
+            if os.path.exists(self.cache_file):
+                os.remove(self.cache_file)
+                logger.info(f"Deleted stale cache file {self.cache_file}")
+        except Exception as e:
+            logger.warning(f"Failed to delete cache file: {e}")
     
     def _is_cache_valid(self, cache_data):
         """Check if cache is still valid based on TTL"""
@@ -97,11 +111,23 @@ class CalendarCache:
         except Exception:
             return False
     
+    def _is_memory_cache_stale(self):
+        """Check if the in-memory cache has exceeded the TTL"""
+        if self._cache_time is None:
+            return True
+        age_hours = (datetime.now() - self._cache_time).total_seconds() / 3600
+        return age_hours >= self.config["cache_ttl_hours"]
+
     def fetch_calendar_events(self):
         """Fetch events from all configured Google Calendars."""
-        if self.cache:
+        if self.cache and not self._is_memory_cache_stale():
             logger.info(f"Using cached calendar data ({len(self.cache)} events)")
             return self.cache
+
+        if self.cache and self._is_memory_cache_stale():
+            logger.info("In-memory cache expired, refreshing")
+            self.cache = []
+            self._delete_cache_file()
         
         logger.info("Fetching calendar events from Google Calendar...")
         all_events = []
