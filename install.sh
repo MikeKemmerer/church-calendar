@@ -37,25 +37,23 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 # Use distro Python packages (PEP 668 friendly on Raspberry Pi OS Bookworm).
 # server.py degrades gracefully if Pillow (python3-pil) is unavailable.
-apt-get install -y python3 python3-pil python3-dateutil python3-requests python3-lxml
+apt-get install -y python3 python3-pil python3-dateutil python3-requests python3-lxml rsync
+
+echo "==> Stopping existing service (if installed)"
+systemctl stop "$SERVICE_NAME" 2>/dev/null || true
 
 echo "==> Deploying application to $DEST"
 install -d -o "$RUN_USER" -g "$RUN_USER" "$DEST"
 if [[ "$SCRIPT_DIR" != "$DEST" ]]; then
     # Copy repo contents into DEST, excluding VCS metadata and local runtime files.
-    if command -v rsync &>/dev/null; then
-        rsync -a --delete \
-            --exclude='.git' \
-            --exclude='__pycache__' \
-            --exclude='*.pyc' \
-            --exclude='calendar_cache.json' \
-            --exclude='image_cache.json' \
-            --exclude='config.json' \
-            "$SCRIPT_DIR"/ "$DEST"/
-    else
-        cp -a "$SCRIPT_DIR"/. "$DEST"/
-        rm -rf "$DEST/.git"
-    fi
+    rsync -a --delete \
+        --exclude='.git' \
+        --exclude='__pycache__' \
+        --exclude='*.pyc' \
+        --exclude='calendar_cache.json' \
+        --exclude='image_cache.json' \
+        --exclude='config.json' \
+        "$SCRIPT_DIR"/ "$DEST"/
     chown -R "$RUN_USER":"$RUN_USER" "$DEST"
 fi
 
@@ -86,6 +84,7 @@ WorkingDirectory=${DEST}
 ExecStart=/usr/bin/python3 ${DEST}/server.py
 Restart=always
 RestartSec=5
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -93,7 +92,7 @@ EOF
 
 echo "==> Enabling and starting service"
 systemctl daemon-reload
-systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || true
+systemctl enable "$SERVICE_NAME" >/dev/null
 systemctl restart "$SERVICE_NAME"
 
 echo ""

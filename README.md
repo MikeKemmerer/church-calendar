@@ -81,7 +81,8 @@ To start the calendar automatically when Raspberry Pi boots:
    ```ini
    [Unit]
    Description=St. Demetrios Church Calendar Server
-   After=network.target
+   After=network-online.target
+   Wants=network-online.target
 
    [Service]
    Type=simple
@@ -89,7 +90,8 @@ To start the calendar automatically when Raspberry Pi boots:
    WorkingDirectory=/home/pi/church-calendar
    ExecStart=/usr/bin/python3 /home/pi/church-calendar/server.py
    Restart=always
-   RestartSec=10
+   RestartSec=5
+   NoNewPrivileges=yes
 
    [Install]
    WantedBy=multi-user.target
