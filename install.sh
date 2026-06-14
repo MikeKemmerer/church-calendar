@@ -92,7 +92,7 @@ EOF
 
 echo "==> Enabling and starting service"
 systemctl daemon-reload
-systemctl enable "$SERVICE_NAME" >/dev/null
+systemctl enable "$SERVICE_NAME"
 systemctl restart "$SERVICE_NAME"
 
 echo ""
