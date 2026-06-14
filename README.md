@@ -24,6 +24,20 @@ A full-screen digital calendar display for church events, optimized for 720p dis
    ```
 3. **Open your browser** to: http://localhost:8000
 
+### Automated install (Raspberry Pi)
+
+To install dependencies, deploy the app, and register a systemd service in one step:
+
+```bash
+sudo ./install.sh
+```
+
+The installer is idempotent (safe to re-run for upgrades). It installs the Python
+dependencies via apt, deploys to `/home/pi/church-calendar`, seeds `config.json` from
+`config.example.json` if missing, and enables a `church-calendar.service` unit that
+starts on boot. Override the target user or directory with `RUN_USER` / `DEST`, e.g.
+`RUN_USER=pi DEST=/home/pi/church-calendar sudo -E ./install.sh`.
+
 ## Dependencies
 
 ### Required for Image Optimization
