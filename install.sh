@@ -31,6 +31,7 @@ if ! id "$RUN_USER" &>/dev/null; then
     echo "Error: user '$RUN_USER' does not exist. Set RUN_USER to a valid account." >&2
     exit 1
 fi
+RUN_GROUP="$(id -gn "$RUN_USER")"
 
 echo "==> Installing system dependencies"
 export DEBIAN_FRONTEND=noninteractive
@@ -43,7 +44,7 @@ echo "==> Stopping existing service (if installed)"
 systemctl stop "$SERVICE_NAME" 2>/dev/null || true
 
 echo "==> Deploying application to $DEST"
-install -d -o "$RUN_USER" -g "$RUN_USER" "$DEST"
+install -d -o "$RUN_USER" -g "$RUN_GROUP" "$DEST"
 if [[ "$SCRIPT_DIR" != "$DEST" ]]; then
     # Copy repo contents into DEST, excluding VCS metadata and local runtime files.
     rsync -a --delete \
@@ -54,14 +55,14 @@ if [[ "$SCRIPT_DIR" != "$DEST" ]]; then
         --exclude='image_cache.json' \
         --exclude='config.json' \
         "$SCRIPT_DIR"/ "$DEST"/
-    chown -R "$RUN_USER":"$RUN_USER" "$DEST"
+    chown -R "$RUN_USER":"$RUN_GROUP" "$DEST"
 fi
 
 echo "==> Ensuring local configuration exists"
 if [[ ! -f "$DEST/config.json" ]]; then
     if [[ -f "$DEST/config.example.json" ]]; then
         cp "$DEST/config.example.json" "$DEST/config.json"
-        chown "$RUN_USER":"$RUN_USER" "$DEST/config.json"
+        chown "$RUN_USER":"$RUN_GROUP" "$DEST/config.json"
         echo "    Seeded config.json from config.example.json — edit it to set your calendar."
     else
         echo "    Warning: no config.example.json found; create $DEST/config.json manually." >&2

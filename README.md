@@ -38,6 +38,10 @@ dependencies via apt, deploys to `/home/pi/church-calendar`, seeds `config.json`
 starts on boot. Override the target user or directory with `RUN_USER` / `DEST`, e.g.
 `RUN_USER=pi DEST=/home/pi/church-calendar sudo -E ./install.sh`.
 
+For Raspberry Pi OS installs, prefer `install.sh` so apt manages the runtime
+dependencies. The `pip install ...` commands below are mainly for development or
+non-Debian/manual environments.
+
 ## Dependencies
 
 ### Required for Image Optimization
