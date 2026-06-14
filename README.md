@@ -36,7 +36,8 @@ The installer is idempotent (safe to re-run for upgrades). It installs the Pytho
 dependencies via apt, deploys to `/home/pi/church-calendar`, seeds `config.json` from
 `config.example.json` if missing, and enables a `church-calendar.service` unit that
 starts on boot. Override the target user or directory with `RUN_USER` / `DEST`, e.g.
-`RUN_USER=pi DEST=/home/pi/church-calendar sudo -E ./install.sh`.
+`RUN_USER=pi DEST=/home/pi/church-calendar sudo -E ./install.sh`. The `pip install …`
+commands below are for development/non-Debian setups; the Pi installer uses apt packages.
 
 For Raspberry Pi OS installs, prefer `install.sh` so apt manages the runtime
 dependencies. The `pip install ...` commands below are mainly for development or
