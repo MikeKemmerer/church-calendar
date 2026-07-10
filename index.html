@@ -1350,8 +1350,57 @@
             }
         }
 
+        // Allow remote control (e.g. church-monitoring) to push display settings
+        // via URL query params: ?theme=&font=&speed=&margins=
+        // Recognized values are persisted to localStorage so they stick on
+        // future loads even without the query string (e.g. after a plain
+        // Midori relaunch that uses the bare kiosk URL).
+        function applyUrlParamOverrides() {
+            const params = new URLSearchParams(window.location.search);
+            const ALLOWED_THEMES = ['classic-gold', 'modern-blue', 'elegant-black', 'liturgical-purple', 'festive-red', 'light'];
+            const ALLOWED_FONTS = ['cinzel-lora', 'roboto-open-sans', 'playfair-source'];
+            const ALLOWED_SPEEDS = ['12', '18'];
+            let applied = false;
+
+            const theme = params.get('theme');
+            if (theme !== null && ALLOWED_THEMES.includes(theme)) {
+                localStorage.setItem('calendar_theme', theme);
+                applied = true;
+            }
+
+            const font = params.get('font');
+            if (font !== null && ALLOWED_FONTS.includes(font)) {
+                localStorage.setItem('calendar_font', font);
+                applied = true;
+            }
+
+            const speed = params.get('speed');
+            if (speed !== null && ALLOWED_SPEEDS.includes(speed)) {
+                localStorage.setItem('calendar_speed', speed);
+                applied = true;
+            }
+
+            const margins = params.get('margins');
+            if (margins === '1' || margins === '0') {
+                if (margins === '1') {
+                    localStorage.setItem('calendar_large_margins', 'true');
+                } else {
+                    localStorage.removeItem('calendar_large_margins');
+                }
+                applied = true;
+            }
+
+            // Keep the address bar clean and avoid re-processing the same
+            // params on manual refreshes.
+            if (applied && window.history && window.history.replaceState) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        }
+
         // Options Menu Functionality
         function initOptionsMenu() {
+            applyUrlParamOverrides();
+
             const optionsBtn = document.getElementById('optionsBtn');
             const optionsMenu = document.getElementById('optionsMenu');
             const closeBtn = document.getElementById('closeOptionsBtn');
