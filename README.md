@@ -42,6 +42,12 @@ directory with `RUN_USER` / `DEST`, e.g.
 
 commands below are for development/non-Debian setups; the Pi installer uses apt packages.
 
+On Ubuntu, the installer loads and attaches a `church-calendar` AppArmor profile.
+It starts in complain mode so host-specific Python dependencies are logged without
+blocking the display. Review `journalctl -k | grep apparmor` and switch to
+enforcement only after reviewing the generated policy:
+`sudo aa-enforce /etc/apparmor.d/church-calendar`.
+
 
 For Raspberry Pi OS installs, prefer `install.sh` so apt manages the runtime
 dependencies. The `pip install ...` commands below are mainly for development or
