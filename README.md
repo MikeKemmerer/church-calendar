@@ -33,11 +33,15 @@ sudo ./install.sh
 ```
 
 The installer is idempotent (safe to re-run for upgrades). It installs the Python
-dependencies via apt, deploys to `/home/pi/church-calendar`, seeds `config.json` from
-`config.example.json` if missing, and enables a `church-calendar.service` unit that
-starts on boot. Override the target user or directory with `RUN_USER` / `DEST`, e.g.
-`RUN_USER=pi DEST=/home/pi/church-calendar sudo -E ./install.sh`. The `pip install …`
-commands below are for development/non-Debian setups; the Pi installer uses apt packages.
+dependencies via apt, deploys new installations to `/opt/church-calendar`, seeds
+`config.json` from `config.example.json` if missing, and enables a
+`church-calendar.service` unit that starts on boot. Existing service and legacy user
+directory deployments are kept in place on re-run. Override the target user or
+directory with `RUN_USER` / `DEST`, e.g.
+`RUN_USER=calendar DEST=/opt/church-calendar sudo -E ./install.sh`. The `pip install …`
+
+commands below are for development/non-Debian setups; the Pi installer uses apt packages.
+
 
 For Raspberry Pi OS installs, prefer `install.sh` so apt manages the runtime
 dependencies. The `pip install ...` commands below are mainly for development or
@@ -73,6 +77,10 @@ If Pillow is not installed, the image optimization and thumbnail generation will
 
 ## System Startup (Raspberry Pi OS)
 
+`install.sh` creates the systemd service automatically with the selected `RUN_USER`
+and `DEST`. The manual examples below are only for custom deployments; replace
+`/opt/church-calendar` and `calendar` with the actual install directory and user.
+
 To start the calendar automatically when Raspberry Pi boots:
 
 ### Method 1: systemd Service (Recommended)
@@ -91,9 +99,9 @@ To start the calendar automatically when Raspberry Pi boots:
 
    [Service]
    Type=simple
-   User=pi
-   WorkingDirectory=/home/pi/church-calendar
-   ExecStart=/usr/bin/python3 /home/pi/church-calendar/server.py
+   User=calendar
+   WorkingDirectory=/opt/church-calendar
+   ExecStart=/usr/bin/python3 /opt/church-calendar/server.py
    Restart=always
    RestartSec=5
    NoNewPrivileges=yes
@@ -122,7 +130,7 @@ To start the calendar automatically when Raspberry Pi boots:
 
 2. Add before `exit 0`:
    ```bash
-   cd /home/pi/church-calendar
+   cd /opt/church-calendar
    /usr/bin/python3 server.py &
    ```
 
@@ -135,7 +143,7 @@ To start the calendar automatically when Raspberry Pi boots:
 
 2. Add:
    ```bash
-   @reboot sleep 30 && cd /home/pi/church-calendar && /usr/bin/python3 server.py &
+   @reboot sleep 30 && cd /opt/church-calendar && /usr/bin/python3 server.py &
    ```
 
 ### Method 4: Desktop Autostart (GUI)
@@ -156,7 +164,7 @@ For Raspberry Pi Desktop:
    [Desktop Entry]
    Type=Application
    Name=Church Calendar
-   Exec=/usr/bin/python3 /home/pi/church-calendar/server.py
+   Exec=/usr/bin/python3 /opt/church-calendar/server.py
    Hidden=false
    NoDisplay=false
    X-GNOME-Autostart-enabled=true
