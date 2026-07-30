@@ -7,18 +7,17 @@
 #
 # Usage:
 #   sudo ./install.sh                 # install/upgrade with defaults
-#   RUN_USER=pi DEST=/home/pi/church-calendar sudo -E ./install.sh
+#   RUN_USER=calendar DEST=/opt/church-calendar sudo -E ./install.sh
 #
 # Environment overrides:
-#   RUN_USER  Service user (default: pi)
-#   DEST      Install directory (default: /home/$RUN_USER/church-calendar)
+#   RUN_USER  Service user (default: non-root user that invoked sudo)
+#   DEST      Install directory (default: /opt/church-calendar for new installs)
 #   PORT      HTTP port the server listens on (informational; default: 8000)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-RUN_USER="${RUN_USER:-pi}"
-DEST="${DEST:-/home/${RUN_USER}/church-calendar}"
+RUN_USER="${RUN_USER:-}"
 SERVICE_NAME="church-calendar"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
@@ -27,11 +26,37 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+if [[ -z "$RUN_USER" ]]; then
+    if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]]; then
+        RUN_USER="$SUDO_USER"
+    else
+        echo "Error: unable to determine a non-root service user. Set RUN_USER explicitly." >&2
+        exit 1
+    fi
+fi
+
+if [[ "$RUN_USER" == "root" ]]; then
+    echo "Error: church-calendar must run as a non-root service user." >&2
+    exit 1
+fi
+
 if ! id "$RUN_USER" &>/dev/null; then
     echo "Error: user '$RUN_USER' does not exist. Set RUN_USER to a valid account." >&2
     exit 1
 fi
 RUN_GROUP="$(id -gn "$RUN_USER")"
+
+if [[ -z "${DEST:-}" ]]; then
+    EXISTING_DEST=$(systemctl show "$SERVICE_NAME" -p WorkingDirectory --value 2>/dev/null || true)
+    LEGACY_DEST="/home/${RUN_USER}/church-calendar"
+    if [[ -n "$EXISTING_DEST" && "$EXISTING_DEST" != "/" && -d "$EXISTING_DEST" ]]; then
+        DEST="$EXISTING_DEST"
+    elif [[ -d "$LEGACY_DEST" ]]; then
+        DEST="$LEGACY_DEST"
+    else
+        DEST="/opt/church-calendar"
+    fi
+fi
 
 echo "==> Installing system dependencies"
 export DEBIAN_FRONTEND=noninteractive
