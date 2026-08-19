@@ -18,6 +18,9 @@ PACIFIC_TZIDS = {
 # Day-name → Python weekday number (Monday = 0)
 BYDAY_MAP = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 
+# Callers that do not care about the horizon keep the original display window.
+DEFAULT_WINDOW_DAYS = 10
+
 
 def get_pacific_offset(dt):
     """Return UTC offset for Pacific time (PDT Mar–Nov, PST otherwise)."""
@@ -294,8 +297,8 @@ def get_calendar_name_from_ical(ical_text):
     return "Calendar"
 
 
-def parse_ical(ical_text, calendar_color, calendar_name):
-    """Parse iCal text and return events within the next 10 days.
+def parse_ical(ical_text, calendar_color, calendar_name, days=DEFAULT_WINDOW_DAYS):
+    """Parse iCal text and return events within the next ``days`` days.
 
     Two-pass approach:
     1. Collect all VEVENT blocks (master recurring events and RECURRENCE-ID
@@ -305,7 +308,7 @@ def parse_ical(ical_text, calendar_color, calendar_name):
     """
     now = datetime.now(timezone.utc)
     today_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_range = today_midnight + timedelta(days=10)
+    end_range = today_midnight + timedelta(days=days)
 
     lines = unfold_ical(ical_text)
 
