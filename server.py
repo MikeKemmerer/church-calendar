@@ -67,6 +67,23 @@ def _load_calendars():
 
 CALENDARS = _load_calendars()
 
+
+def _calendar_setting(key, default):
+    """Read one integer from the config.json ``calendar`` section."""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json'), 'r') as f:
+            cal_cfg = json.load(f).get("calendar", {})
+        value = int(cal_cfg.get(key, default))
+        return value if value > 0 else default
+    except (FileNotFoundError, json.JSONDecodeError, AttributeError, TypeError, ValueError):
+        return default
+
+
+# The cache serves downstream schedulers; the Pi display only ever shows a short window.
+CACHE_DAYS = _calendar_setting("cache_days", 90)
+DISPLAY_DAYS = _calendar_setting("display_days", 10)
+
+
 def fetch_calendar_events():
     """Fetch events from all configured Google Calendars."""
     all_events = []
@@ -83,7 +100,7 @@ def fetch_calendar_events():
             with urllib.request.urlopen(req, timeout=15) as response:
                 ical_text = response.read().decode("utf-8", errors="replace")
                 cal_name = get_calendar_name_from_ical(ical_text)
-                cal_events = parse_ical(ical_text, color, cal_name)
+                cal_events = parse_ical(ical_text, color, cal_name, days=CACHE_DAYS)
                 all_events.extend(cal_events)
                 logger.info(f"calendar_fetch_success calendar={cal_name} events={len(cal_events)}")
         except Exception as e:
@@ -123,6 +140,21 @@ def parse_event_datetime(value):
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def limit_events_to_days(events, days, now=None):
+    """Trim cached events to a shorter window for the display."""
+    if not days or days <= 0:
+        return events
+
+    now = now or datetime.now(timezone.utc)
+    cutoff = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=days)
+    trimmed = []
+    for event in events:
+        start = parse_event_datetime(event.get("start"))
+        if start is None or start <= cutoff:
+            trimmed.append(event)
+    return trimmed
 
 
 def build_service_restart_schedule(events, now=None, gap_minutes=15):
@@ -231,7 +263,7 @@ class CalendarHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             
             logger.info("api_events_fetch_start")
-            events = fetch_cached_calendar_events()
+            events = limit_events_to_days(fetch_cached_calendar_events(), DISPLAY_DAYS)
             logger.info(f"api_events_fetch_complete events={len(events)}")
             
             self.wfile.write(json.dumps(events).encode("utf-8"))
