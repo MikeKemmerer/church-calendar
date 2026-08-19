@@ -173,7 +173,7 @@ class CalendarCache:
         # Cache the results
         self._save_cache(all_events)
         
-        logger.info(f"Total: {len(all_events)} events in the next 10 days")
+        logger.info(f"Total: {len(all_events)} events in the next {self.config['cache_days']} days")
         return all_events
 
 
