@@ -29,6 +29,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger("church-calendar.server")
 
+try:
+    from ntfy_notify import NtfyLoggingHandler
+
+    logging.getLogger("church-calendar").addHandler(NtfyLoggingHandler())
+
+    def _notify_uncaught(exc_type, exc_value, exc_tb):
+        logging.getLogger("church-calendar").critical(
+            "uncaught_exception", exc_info=(exc_type, exc_value, exc_tb)
+        )
+        sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+    sys.excepthook = _notify_uncaught
+except ImportError as e:
+    logger.warning(f"ntfy alerting unavailable: {e}")
+
+
 # Import optimization systems
 try:
     from image_optimizer import ImageOptimizer

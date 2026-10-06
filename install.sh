@@ -216,6 +216,7 @@ cat > "$SERVICE_FILE" <<EOF
 Description=St. Demetrios Church Calendar Display
 After=network-online.target
 Wants=network-online.target
+OnFailure=church-calendar-ntfy-failure.service
 
 [Service]
 Type=simple
@@ -235,6 +236,18 @@ echo "==> Enabling and starting service"
 systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
 systemctl restart "$SERVICE_NAME"
+
+echo "==> Writing ntfy failure-alert unit"
+cat > /etc/systemd/system/church-calendar-ntfy-failure.service <<EOF
+[Unit]
+Description=Send an ntfy alert that church-calendar failed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -c "import sys; sys.path.insert(0, '${DEST}'); import ntfy_notify; ntfy_notify.send('church-calendar.service failed', title='church-calendar (%H)', priority='high', dedupe_key='unit-failed:church-calendar.service')"
+EOF
+systemctl daemon-reload
+echo "    (set the alert topic with: echo YOUR_TOPIC | sudo tee /etc/church-calendar/ntfy-topic)"
 
 echo ""
 echo "Done. church-calendar is installed at $DEST and running as a systemd service."
