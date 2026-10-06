@@ -27,6 +27,10 @@
     "refresh_interval": 300,
     "cache_enabled": true,
     "cache_file": "calendar_cache.json",
+    "cache_days": 90,
+    // How far ahead calendar_cache.json reaches, for downstream schedulers
+    "display_days": 10,
+    // How far ahead this Pi's own display shows
     "max_events": 100
   },
   "display": {

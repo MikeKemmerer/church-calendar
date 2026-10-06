@@ -40,11 +40,25 @@ def _load_calendars():
 
 CALENDARS = _load_calendars()
 
+
+def _calendar_setting(key, default):
+    """Read one integer from the config.json ``calendar`` section."""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json'), 'r') as f:
+            cal_cfg = json.load(f).get("calendar", {})
+        value = int(cal_cfg.get(key, default))
+        return value if value > 0 else default
+    except (FileNotFoundError, json.JSONDecodeError, AttributeError, TypeError, ValueError):
+        return default
+
+
 # Cache configuration
 CACHE_CONFIG = {
     "cache_file": "calendar_cache.json",
     "cache_ttl_hours": 20,  # Cache for 20 hours
-    "fetch_timeout": 15  # Timeout for calendar fetches
+    "fetch_timeout": 15,  # Timeout for calendar fetches
+    # Schedulers consume this cache directly, so it holds far more than the display shows.
+    "cache_days": _calendar_setting("cache_days", 90),
 }
 
 class CalendarCache:
@@ -144,7 +158,7 @@ class CalendarCache:
                 with urllib.request.urlopen(req, timeout=self.config["fetch_timeout"]) as response:
                     ical_text = response.read().decode("utf-8", errors="replace")
                     cal_name = get_calendar_name_from_ical(ical_text)
-                    cal_events = parse_ical(ical_text, color, cal_name)
+                    cal_events = parse_ical(ical_text, color, cal_name, days=self.config["cache_days"])
                     all_events.extend(cal_events)
                     logger.info(f"  ✓ {cal_name}: {len(cal_events)} events")
             except Exception as e:
@@ -159,7 +173,7 @@ class CalendarCache:
         # Cache the results
         self._save_cache(all_events)
         
-        logger.info(f"Total: {len(all_events)} events in the next 10 days")
+        logger.info(f"Total: {len(all_events)} events in the next {self.config['cache_days']} days")
         return all_events
 
 
