@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 import logging
 import glob
 
+import image_schedule
+
 logging.Formatter.converter = time.gmtime
 logging.basicConfig(
     level=logging.INFO,
@@ -124,6 +126,17 @@ class ImageSourceManager:
         
         # Build glob pattern for file extensions
         pattern = "*"
+
+        # Only images inside their schedule window are shown; if the schedule can't be read, show all.
+        active_names = None
+        try:
+            timezone_name = self.config.get("calendar", {}).get("timezone") or image_schedule.DEFAULT_TIMEZONE
+            active_names = image_schedule.active_names(
+                folder_path, image_schedule.today_local(timezone_name), tuple(file_extensions)
+            )
+        except Exception as e:
+            logger.error(f"Image schedule unavailable, showing every image: {e}")
+        hidden = 0
         
         # Find all image files
         for ext in file_extensions:
@@ -139,6 +152,9 @@ class ImageSourceManager:
                 try:
                     # Get file information
                     file_name = os.path.basename(file_path)
+                    if active_names is not None and file_name not in active_names:
+                        hidden += 1
+                        continue
                     file_size = os.path.getsize(file_path)
                     file_mtime = os.path.getmtime(file_path)
                     file_date = datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d %H:%M:%S')
@@ -177,7 +193,7 @@ class ImageSourceManager:
                     logger.warning(f"Could not access file {file_path}: {e}")
                     continue
         
-        logger.info(f"Local files folder '{folder_path}': {len(images)} images found")
+        logger.info(f"Local files folder '{folder_path}': {len(images)} images found, {hidden} outside their schedule")
         return images
     
 

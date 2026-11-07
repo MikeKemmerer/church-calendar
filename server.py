@@ -56,11 +56,15 @@ except ImportError as e:
 
 # Import the multi-source image fetching system
 try:
+    import image_schedule
+    import image_sources
     from image_sources import ImageSourceManager
     IMAGE_SOURCES_AVAILABLE = True
 except ImportError:
     IMAGE_SOURCES_AVAILABLE = False
     logger.warning("image_sources.py not found. Image functionality disabled.")
+
+IMAGE_SWEEP_HOUR = 3  # local hour of the nightly archive sweep
 
 from ical_parser import get_calendar_name_from_ical, parse_ical
 
@@ -334,6 +338,33 @@ class CalendarHandler(http.server.SimpleHTTPRequestHandler):
             pass
 
 
+def run_image_sweep():
+    """Archive auto-archive images whose last day has passed."""
+    try:
+        today = image_schedule.today_local(image_schedule.config_timezone())
+        archived = image_schedule.sweep(image_schedule.resolve_images_dir(None), today)
+        if archived:
+            logger.info(f"image_schedule_archived count={len(archived)} files={archived}")
+            if IMAGE_OPTIMIZATION_AVAILABLE:
+                ImageOptimizer().optimize_all_images()
+            image_sources.IMAGE_CACHE.clear()
+    except Exception as e:
+        logger.error(f"image_schedule_sweep_failed error={e}")
+
+
+def schedule_nightly_image_sweep():
+    delay = image_schedule.seconds_until_hour(IMAGE_SWEEP_HOUR, image_schedule.config_timezone())
+
+    def _run_then_reschedule():
+        run_image_sweep()
+        schedule_nightly_image_sweep()
+
+    timer = threading.Timer(delay, _run_then_reschedule)
+    timer.daemon = True
+    timer.start()
+    logger.info(f"image_sweep_scheduled in_seconds={int(delay)}")
+
+
 def main():
     global CALENDAR_CACHE_INSTANCE
     logger.info("server_start church=St.Demetrios process=calendar-display")
@@ -349,6 +380,11 @@ def main():
             logger.info(f"image_optimization_complete images={optimized_count}")
         except Exception as e:
             logger.error(f"image_optimization_failed error={e}")
+
+    # 1b. Archive images past their end date now, and again every night
+    if IMAGE_SOURCES_AVAILABLE:
+        run_image_sweep()
+        schedule_nightly_image_sweep()
     
     # 2. Cache calendar data at service start time (no periodic refresh)
     if IMAGE_OPTIMIZATION_AVAILABLE:

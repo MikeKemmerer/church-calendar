@@ -234,6 +234,28 @@ The system supports displaying images from a local folder that can be shared via
    - Remove old images as needed
    - System automatically detects changes
 
+#### Image schedule (start date, end date, auto-archive)
+
+Each image can have a start date, an end date, and an auto-archive flag. Dates are
+calendar days in the configured timezone; an image is shown **through** its end date and
+hidden the next day.
+
+- **Filename convention** (used when a file is first seen): a leading `YYYY-MM-DD ` is the
+  end date, e.g. `2026-12-14 Rummage Sale.png`. A year of 2099 or later means "never ends".
+  Adding `[auto-archive]` before the extension, e.g. `2026-12-14 Rummage Sale [auto-archive].png`,
+  moves the image to `images/archive/` the day after its end date. Files with no date are
+  always shown.
+- **Schedule file**: `images/image-schedule.json` is the source of truth once an image has
+  been seen. It is created and pruned automatically; editing dates does not rename files.
+  Start dates are only set through this file, the church-monitoring dashboard, or the CLI.
+- **Archiving** happens at service start and nightly at 03:00 local time. Nothing is ever
+  deleted; archived images are moved to `images/archive/`.
+- **CLI**: `python3 image_schedule.py list`, `set <file> --show-from D --remove-after D
+  [--auto-archive] [--persistent]`, `drop <file>`, `sweep [--today D]` (all take
+  `--images-dir`).
+
+The installer records the installed release in `/etc/church-calendar/installed-version.json`.
+
 ### NFS/SMB Share Setup
 
 #### NFS Share Setup (Linux/macOS)
