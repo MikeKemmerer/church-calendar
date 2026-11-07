@@ -14,6 +14,15 @@
 
 ## Configuration Options
 
+### Branding Settings
+- `branding.title`: Heading shown at the top of the display (default: `Church Calendar`)
+- `branding.subtitle`: Line under the heading (default: `Upcoming Events • Next {days} Days`;
+  `{days}` becomes `calendar.display_days`)
+- `branding.page_title`: Browser tab title (default: `{title} - Calendar`)
+
+Changes apply on the next page load; no restart is needed. The ⚙️ options menu also shows the
+installed version (from `/etc/church-calendar/installed-version.json`, or `VERSION` on a checkout).
+
 ### Display Settings
 - `slide_duration`: Slide transition time in seconds (default: 12)
 - `theme`: Theme name (see list above)

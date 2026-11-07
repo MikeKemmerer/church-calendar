@@ -276,7 +276,7 @@ fi
 echo "==> Writing systemd service"
 write_unit "$SERVICE_FILE" <<EOF
 [Unit]
-Description=St. Demetrios Church Calendar Display
+Description=Church Calendar Display
 After=network-online.target
 Wants=network-online.target
 OnFailure=church-calendar-ntfy-failure.service

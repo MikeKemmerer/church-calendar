@@ -1,4 +1,4 @@
-# St. Demetrios Greek Orthodox Church Calendar
+# Church Calendar
 
 A full-screen digital calendar display for church events, optimized for 720p displays and Raspberry Pi Zero 2W performance.
 
@@ -192,6 +192,12 @@ echo YOUR_TOPIC | sudo tee /etc/church-calendar/ntfy-topic
 
 Never commit this file or its value; anyone who knows an ntfy.sh topic can
 read and send to it.
+
+### Branding
+
+The heading, subtitle and browser title come from the `branding` section of `config.json`
+(`title`, `subtitle`, `page_title`; see `CONFIG_GUIDE.md`). Nothing church-specific is hard-coded
+in the page, so another church only needs to change those values.
 
 ### Calendar Configuration
 

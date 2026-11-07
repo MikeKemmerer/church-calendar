@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-St. Demetrios Greek Orthodox Church - Calendar Display Server
+Church Calendar - Calendar Display Server
 Optimized for Raspberry Pi Zero 2W performance with caching and image optimization.
 Run: python server.py
 Then open: http://localhost:8000
@@ -102,6 +102,55 @@ def _calendar_setting(key, default):
 # The cache serves downstream schedulers; the Pi display only ever shows a short window.
 CACHE_DAYS = _calendar_setting("cache_days", 90)
 DISPLAY_DAYS = _calendar_setting("display_days", 10)
+
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+VERSION_RECORD = "/etc/church-calendar/installed-version.json"
+
+
+def get_branding():
+    """Display text from the config.json ``branding`` section, re-read per call so edits show on reload."""
+    try:
+        with open(os.path.join(APP_DIR, 'config.json'), 'r') as f:
+            cfg = json.load(f).get("branding", {})
+    except (OSError, ValueError, AttributeError):
+        cfg = {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+
+    def text(key, default):
+        value = cfg.get(key)
+        return value.strip()[:120] if isinstance(value, str) and value.strip() else default
+
+    title = text("title", "Church Calendar")
+    return {
+        "title": title,
+        "subtitle": text("subtitle", "Upcoming Events \u2022 Next {days} Days").replace("{days}", str(DISPLAY_DAYS)),
+        "page_title": text("page_title", "{title} - Calendar").replace("{title}", title),
+    }
+
+
+def get_version_info():
+    """The installed release if the installer recorded one, else the VERSION file of this checkout."""
+    try:
+        with open(VERSION_RECORD, 'r') as f:
+            record = json.load(f)
+        return {"version": record.get("version"), "tag": record.get("tag")}
+    except (OSError, ValueError, AttributeError):
+        pass
+    try:
+        with open(os.path.join(APP_DIR, 'VERSION'), 'r') as f:
+            return {"version": f.read().strip() or None, "tag": None}
+    except OSError:
+        return {"version": None, "tag": None}
+
+
+def image_preview_url(name):
+    """Best available web path for an image: optimized copy, then thumbnail, then the original."""
+    quoted = urllib.parse.quote(name)
+    for folder, prefix in (("optimized", "/optimized/"), ("thumbnails", "/thumbnails/")):
+        if os.path.exists(os.path.join(APP_DIR, "images", folder, name + ".webp")):
+            return f"{prefix}{quoted}.webp"
+    return f"/images/{quoted}"
 
 
 def fetch_calendar_events():
@@ -327,12 +376,23 @@ class CalendarHandler(http.server.SimpleHTTPRequestHandler):
                 # Return empty array if no image manager
                 self.wfile.write(json.dumps([]).encode("utf-8"))
         
+        elif path in ("/api/branding", "/api/version"):
+            body = get_branding() if path == "/api/branding" else get_version_info()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(json.dumps(body).encode("utf-8"))
+
         elif path == "/api/image-schedule":
             try:
                 today = image_schedule.today_local(image_schedule.config_timezone())
                 body = {
                     "today": today.isoformat(),
-                    "images": image_schedule.listing(image_schedule.resolve_images_dir(None), today, read_only=True),
+                    "images": [
+                        {**row, "image": image_preview_url(row["filename"])}
+                        for row in image_schedule.listing(image_schedule.resolve_images_dir(None), today, read_only=True)
+                    ],
                 }
                 status = 200
             except Exception as e:
@@ -384,7 +444,7 @@ def schedule_nightly_image_sweep():
 
 def main():
     global CALENDAR_CACHE_INSTANCE
-    logger.info("server_start church=St.Demetrios process=calendar-display")
+    logger.info("server_start process=calendar-display")
     
     # Initialize optimization systems at startup
     logger.info("initializing_optimizations")
