@@ -12,6 +12,12 @@ image_cache.json
 # Site-specific config (contains calendar IDs)
 config.json
 
+# ntfy alert topic — the only secret for push alerts; never commit a real one.
+# Written at /etc/church-calendar/ntfy-topic on each deployed host, never
+# in-repo; this is a safety net in case a local copy is ever created here.
+ntfy-topic
+**/ntfy-topic
+
 # Optimized images
 images/optimized/
 images/

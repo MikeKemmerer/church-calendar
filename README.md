@@ -178,6 +178,21 @@ For Raspberry Pi Desktop:
 
 ## Configuration
 
+### Error Alerts (ntfy)
+
+The installed systemd service alerts via [ntfy](https://ntfy.sh) when
+`church-calendar.service` crashes (systemd `OnFailure=`), and any ERROR or
+CRITICAL log line from the server (calendar fetch failures, image
+optimization failures, uncaught exceptions) also sends an alert, deduped for
+15 minutes per distinct message. Enable it by writing your topic:
+
+```bash
+echo YOUR_TOPIC | sudo tee /etc/church-calendar/ntfy-topic
+```
+
+Never commit this file or its value; anyone who knows an ntfy.sh topic can
+read and send to it.
+
 ### Calendar Configuration
 
 Calendar IDs are configured in `config.json` (not tracked in git). To set up:

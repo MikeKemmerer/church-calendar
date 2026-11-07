@@ -34,6 +34,11 @@
 - `refresh_interval`: Calendar refresh interval in seconds (default: 300)
 - `cache_enabled`: Enable calendar caching (default: true)
 - `cache_file`: Cache file name (default: "calendar_cache.json")
+- `cache_days`: How many days ahead to cache (default: 90). `calendar_cache.json`
+  is consumed by LiveStreamScheduler, which cannot schedule further ahead than
+  this window reaches.
+- `display_days`: How many days ahead this Pi's display shows (default: 10).
+  Kept separate from `cache_days` so a wider cache does not slow the display.
 - `max_events`: Maximum number of events to cache (default: 100)
 
 ### Local Files Settings
