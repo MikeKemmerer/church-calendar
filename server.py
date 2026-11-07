@@ -327,6 +327,23 @@ class CalendarHandler(http.server.SimpleHTTPRequestHandler):
                 # Return empty array if no image manager
                 self.wfile.write(json.dumps([]).encode("utf-8"))
         
+        elif path == "/api/image-schedule":
+            try:
+                today = image_schedule.today_local(image_schedule.config_timezone())
+                body = {
+                    "today": today.isoformat(),
+                    "images": image_schedule.listing(image_schedule.resolve_images_dir(None), today, read_only=True),
+                }
+                status = 200
+            except Exception as e:
+                logger.error(f"api_image_schedule_failed error={e}")
+                body, status = {"error": "image schedule unavailable"}, 500
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(json.dumps(body).encode("utf-8"))
+
         elif path == "/" or path == "":
             self.path = "/index.html"
             super().do_GET()

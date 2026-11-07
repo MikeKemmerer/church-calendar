@@ -254,6 +254,10 @@ hidden the next day.
   [--auto-archive] [--persistent]`, `drop <file>`, `sweep [--today D]` (all take
   `--images-dir`).
 
+The display's ⚙️ options menu has a read-only **View image schedule** list (upcoming, ending,
+and past-end-date images), backed by `GET /api/image-schedule`. Changes are made through the
+monitoring dashboard or the CLI, since the calendar server has no authentication.
+
 The installer records the installed release in `/etc/church-calendar/installed-version.json`.
 
 ### NFS/SMB Share Setup

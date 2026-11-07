@@ -878,6 +878,44 @@
             background: var(--primary-dark);
             transform: translateY(-1px);
         }
+
+        .image-schedule-btn {
+            text-align: left;
+        }
+
+        .image-schedule {
+            margin-top: 0.5rem;
+            max-height: 16rem;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            color: var(--dropdown-text);
+        }
+
+        .image-schedule h4 {
+            margin: 0.6rem 0 0.2rem;
+            font-size: 0.8rem;
+            color: var(--primary-color);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .image-schedule-row {
+            display: flex;
+            flex-direction: column;
+            padding: 0.2rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .image-schedule-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .image-schedule-when {
+            flex-shrink: 0;
+            color: var(--text-muted);
+        }
     </style>
 </head>
 <body>
@@ -938,6 +976,12 @@
                     </label>
                 </div>
                 
+                <div class="options-section">
+                    <label>Images</label>
+                    <button type="button" id="imageScheduleBtn" class="options-select image-schedule-btn">View image schedule</button>
+                    <div id="imageSchedule" class="image-schedule" style="display: none;"></div>
+                </div>
+
                 <div class="options-actions">
                     <button id="resetBtn" class="reset-btn">Reset to Defaults</button>
                 </div>
@@ -1397,9 +1441,90 @@
             }
         }
 
+        // Read-only view of upcoming, ending and expired images
+        function initImageSchedule() {
+            const btn = document.getElementById('imageScheduleBtn');
+            const box = document.getElementById('imageSchedule');
+            btn.addEventListener('click', () => {
+                if (box.style.display === 'block') {
+                    box.style.display = 'none';
+                    btn.textContent = 'View image schedule';
+                    return;
+                }
+                box.style.display = 'block';
+                btn.textContent = 'Hide image schedule';
+                loadImageSchedule(box);
+            });
+        }
+
+        async function loadImageSchedule(box) {
+            box.textContent = 'Loading...';
+            try {
+                const res = await fetch('/api/image-schedule', { cache: 'no-store' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                renderImageSchedule(box, data);
+            } catch (err) {
+                box.textContent = 'Could not load the image schedule.';
+            }
+        }
+
+        function renderImageSchedule(box, data) {
+            const images = data.images || [];
+            const thisYear = String(data.today || '').slice(0, 4);
+            const fmt = (iso) => {
+                const [y, m, d] = iso.split('-').map(Number);
+                const opts = { month: 'short', day: 'numeric' };
+                if (String(y) !== thisYear) opts.year = 'numeric';
+                return new Date(y, m - 1, d).toLocaleDateString(undefined, opts);
+            };
+            const title = (name) => name
+                .replace(/\.[^.]+$/, '')
+                .replace(/^\d{4}-\d{2}-\d{2}\s+/, '')
+                .replace(/\s*\[auto-archive\]$/i, '');
+            const byDate = (key) => (a, b) => (a[key] || '').localeCompare(b[key] || '');
+
+            const groups = [
+                ['Upcoming', images.filter(i => i.state === 'scheduled').sort(byDate('show_from')),
+                    i => 'starts ' + fmt(i.show_from) + (i.remove_after ? ', ends ' + fmt(i.remove_after) : '') + (i.auto_archive ? ' \u00b7 auto-archive' : '')],
+                ['Ending', images.filter(i => i.state === 'active' && i.remove_after).sort(byDate('remove_after')),
+                    i => 'ends ' + fmt(i.remove_after) + (i.auto_archive ? ' \u00b7 auto-archive' : '')],
+                ['Past end date', images.filter(i => i.state === 'expired').sort(byDate('remove_after')),
+                    i => 'ended ' + fmt(i.remove_after) + (i.auto_archive ? ' \u00b7 archives overnight' : '')]
+            ];
+            const alwaysShown = images.filter(i => i.state === 'persistent' || (i.state === 'active' && !i.remove_after)).length;
+
+            box.textContent = '';
+            groups.forEach(([heading, items, describe]) => {
+                if (!items.length) return;
+                const h = document.createElement('h4');
+                h.textContent = heading;
+                box.appendChild(h);
+                items.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = 'image-schedule-row';
+                    const name = document.createElement('span');
+                    name.className = 'image-schedule-name';
+                    name.textContent = title(item.filename);
+                    name.title = item.filename;
+                    const when = document.createElement('span');
+                    when.className = 'image-schedule-when';
+                    when.textContent = describe(item);
+                    row.append(name, when);
+                    box.appendChild(row);
+                });
+            });
+            const summary = document.createElement('div');
+            summary.className = 'image-schedule-when';
+            summary.style.marginTop = '0.6rem';
+            summary.textContent = alwaysShown + ' image' + (alwaysShown === 1 ? '' : 's') + ' always shown';
+            box.appendChild(summary);
+        }
+
         // Options Menu Functionality
         function initOptionsMenu() {
             applyUrlParamOverrides();
+            initImageSchedule();
 
             const optionsBtn = document.getElementById('optionsBtn');
             const optionsMenu = document.getElementById('optionsMenu');
