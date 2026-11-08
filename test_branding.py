@@ -117,6 +117,43 @@ class BrandingAndVersionTests(unittest.TestCase):
         for bad in ("../config.json", "sub/ok.png", "notes.txt", "missing.png", "", ".."):
             self.assertIsNone(server.resolve_source_image(bad), bad)
 
+    def test_source_route_refuses_symlinks_that_leave_the_folder(self):
+        self.configured = self.dir / "mnt-posters"
+        self.configured.mkdir()
+        secret = self.dir / "ntfy-topic"
+        secret.write_text("private")
+        (self.configured / "poster.png").symlink_to(secret)
+        (self.configured / "real.png").write_bytes(b"x")
+        (self.configured / "alias.png").symlink_to(self.configured / "real.png")
+        self.assertIsNone(server.resolve_source_image("poster.png"))
+        self.assertEqual(server.resolve_source_image("alias.png"), self.configured / "alias.png")
+
+    def test_public_static_files_are_an_allowlist(self):
+        for folder in ("fonts", "images", "images/archive"):
+            (self.dir / folder).mkdir(parents=True, exist_ok=True)
+        for name in ("index.html", "calendar_cache.json", "config.json", "server.py", "fonts/a.woff2",
+                     "images/poster.png", "images/image-schedule.json", "images/archive/old.png"):
+            (self.dir / name).write_text("x")
+        (self.dir / "images" / "sneaky.png").symlink_to(self.dir / "config.json")
+        allowed = ["/index.html", "/calendar_cache.json", "/fonts/a.woff2", "/images/poster.png", "/images/poster%2Epng"]
+        refused = ["/config.json", "/server.py", "/.git/HEAD", "/images/", "/images/archive/old.png",
+                   "/images/image-schedule.json", "/images/sneaky.png", "/fonts/", "/images/..%2Fconfig.json",
+                   "/images/%2e%2e%2fserver.py", "/fonts/../config.json", "/images/missing.png"]
+        for path in allowed:
+            self.assertIsNotNone(server.public_static_file(path), path)
+        for path in refused:
+            self.assertIsNone(server.public_static_file(path), path)
+
+    def test_file_inside_rejects_traversal_hidden_and_escaping_symlinks(self):
+        folder = self.dir / "images" / "optimized"
+        folder.mkdir(parents=True)
+        (folder / "ok.webp").write_text("x")
+        (self.dir / "config.json").write_text("{}")
+        (folder / "out.webp").symlink_to(self.dir / "config.json")
+        self.assertEqual(server.file_inside(folder, "ok.webp"), folder / "ok.webp")
+        for bad in ("../../config.json", "..", "", ".hidden", "out.webp", "missing.webp"):
+            self.assertIsNone(server.file_inside(folder, bad), bad)
+
 
 if __name__ == "__main__":
     unittest.main()

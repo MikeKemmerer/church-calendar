@@ -18,6 +18,7 @@ import logging
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 mimetypes.add_type('font/woff2', '.woff2')
 
@@ -70,6 +71,8 @@ from ical_parser import get_calendar_name_from_ical, parse_ical
 
 PORT = 8000
 CALENDAR_CACHE_INSTANCE = None
+# Request threads, the deferred retry and startup all share one CalendarCache.
+CALENDAR_CACHE_LOCK = threading.Lock()
 LAST_LOGGED_RESTART_TRIGGER = object()
 
 # Load calendar configurations from config.json
@@ -164,12 +167,52 @@ def get_version_info():
 IMAGE_FILE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 
 
+def file_inside(folder, name):
+    """``folder/name`` if it is a regular file that stays inside ``folder`` (symlinks too), else None."""
+    if not name or os.path.basename(name) != name or name.startswith("."):
+        return None
+    try:
+        base = Path(folder).resolve(strict=True)
+        real = (Path(folder) / name).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+    return Path(folder) / name if real.is_relative_to(base) and real.is_file() else None
+
+
+# The only app files anyone may fetch; config.json, source, .git, caches and folder listings stay private.
+PUBLIC_FILES = {"/index.html", "/calendar_cache.json"}  # calendar_cache.json feeds LiveStreamScheduler
+PUBLIC_FOLDERS = {"/fonts/": ("fonts", None), "/images/": ("images", IMAGE_FILE_EXTENSIONS)}
+
+
+def public_static_file(url_path):
+    """The app file a public URL path names, or None."""
+    path = urllib.parse.unquote(url_path)
+    if path in PUBLIC_FILES:
+        return file_inside(APP_DIR, path[1:])
+    for prefix, (folder, extensions) in PUBLIC_FOLDERS.items():
+        if path.startswith(prefix):
+            name = path[len(prefix):]
+            if extensions is not None and os.path.splitext(name)[1].lower() not in extensions:
+                return None
+            return file_inside(os.path.join(APP_DIR, folder), name)
+    return None
+
+
 def resolve_source_image(name):
-    """The original image ``name`` in the configured folder, or None; only bare image file names qualify."""
+    """The original image ``name`` in the configured folder, or None.
+
+    Only bare image file names qualify, and a symlink must not lead outside the folder.
+    """
     if not name or os.path.basename(name) != name or os.path.splitext(name)[1].lower() not in IMAGE_FILE_EXTENSIONS:
         return None
-    path = image_schedule.resolve_images_dir(None) / name
-    return path if path.is_file() else None
+    folder = image_schedule.resolve_images_dir(None)
+    path = folder / name
+    try:
+        real = path.resolve(strict=True)
+        inside = real.is_relative_to(folder.resolve(strict=True))
+    except OSError:
+        return None
+    return path if inside and real.is_file() else None
 
 
 def image_preview_url(name):
@@ -219,9 +262,10 @@ def fetch_cached_calendar_events():
         return fetch_calendar_events()
 
     try:
-        if CALENDAR_CACHE_INSTANCE is None:
-            CALENDAR_CACHE_INSTANCE = CalendarCache()
-        return CALENDAR_CACHE_INSTANCE.fetch_calendar_events()
+        with CALENDAR_CACHE_LOCK:
+            if CALENDAR_CACHE_INSTANCE is None:
+                CALENDAR_CACHE_INSTANCE = CalendarCache()
+            return CALENDAR_CACHE_INSTANCE.fetch_calendar_events()
     except Exception as e:
         logger.warning(f"cached_fetch_failed_fallback_live error={e}")
         return fetch_calendar_events()
@@ -436,10 +480,27 @@ class CalendarHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(body).encode("utf-8"))
 
         elif path == "/" or path == "":
-            self.path = "/index.html"
-            super().do_GET()
+            self.serve_public_static("/index.html")
+        else:
+            self.serve_public_static(path)
+
+    def do_HEAD(self):
+        path = self.path.split("?", 1)[0]
+        self.serve_public_static("/index.html" if path in ("", "/") else path, head_only=True)
+
+    def serve_public_static(self, path, head_only=False):
+        if public_static_file(path) is None:
+            self.send_error(404, "File not found")
+            return
+        self.path = path
+        if head_only:
+            super().do_HEAD()
         else:
             super().do_GET()
+
+    def list_directory(self, path):
+        self.send_error(404, "File not found")
+        return None
     
     def log_message(self, format, *args):
         if "/api/" not in str(args[0]):
@@ -511,10 +572,11 @@ def main():
         def _deferred_calendar_retry():
             global CALENDAR_CACHE_INSTANCE
             try:
-                if CALENDAR_CACHE_INSTANCE is None:
-                    return
-                CALENDAR_CACHE_INSTANCE.cache = []
-                events = CALENDAR_CACHE_INSTANCE.fetch_calendar_events()
+                with CALENDAR_CACHE_LOCK:
+                    if CALENDAR_CACHE_INSTANCE is None:
+                        return
+                    CALENDAR_CACHE_INSTANCE.cache = []
+                    events = CALENDAR_CACHE_INSTANCE.fetch_calendar_events()
                 if events:
                     logger.info(f"deferred_calendar_retry_succeeded events={len(events)}")
                 else:
@@ -547,40 +609,30 @@ def main():
     try:
         # Custom handler to serve optimized images and thumbnails
         class OptimizedImageHandler(CalendarHandler):
+            def serve_derivative(self, folder):
+                # Decode before taking the name, so an encoded "../" cannot reach outside the folder.
+                requested_name = os.path.basename(urllib.parse.unquote(self.path.split('?', 1)[0]))
+                derivative = file_inside(os.path.join(APP_DIR, 'images', folder), requested_name)
+                if derivative is None:
+                    self.send_error(404, 'File not found')
+                    return
+                self.send_response(200)
+                self.send_header('Content-type', 'image/webp')
+                self.send_header('Cache-Control', 'public, max-age=86400')
+                self.end_headers()
+                with open(derivative, 'rb') as f:
+                    self.wfile.write(f.read())
+
             def do_GET(self):
                 if self.path.startswith('/optimized/'):
-                    # Serve only flat files from images/optimized
-                    requested_name = urllib.parse.unquote(os.path.basename(self.path.split('?', 1)[0]))
-                    optimized_path = os.path.join('images', 'optimized', requested_name)
-                    if os.path.isfile(optimized_path):
-                        self.send_response(200)
-                        self.send_header('Content-type', 'image/webp')
-                        self.send_header('Cache-Control', 'public, max-age=86400')
-                        self.end_headers()
-                        with open(optimized_path, 'rb') as f:
-                            self.wfile.write(f.read())
-                        return
-                    else:
-                        self.send_error(404, 'File not found')
-                        return
+                    self.serve_derivative('optimized')
+                    return
                 elif self.path.startswith('/thumbnails/'):
-                    # Serve only flat files from images/thumbnails
-                    requested_name = urllib.parse.unquote(os.path.basename(self.path.split('?', 1)[0]))
-                    thumbnail_path = os.path.join('images', 'thumbnails', requested_name)
-                    if os.path.isfile(thumbnail_path):
-                        self.send_response(200)
-                        self.send_header('Content-type', 'image/webp')
-                        self.send_header('Cache-Control', 'public, max-age=86400')
-                        self.end_headers()
-                        with open(thumbnail_path, 'rb') as f:
-                            self.wfile.write(f.read())
-                        return
-                    else:
-                        self.send_error(404, 'File not found')
-                        return
+                    self.serve_derivative('thumbnails')
+                    return
                 elif self.path.startswith('/source-images/'):
                     # Originals from the configured folder when it is not the app's own images/ folder
-                    requested_name = urllib.parse.unquote(os.path.basename(self.path.split('?', 1)[0]))
+                    requested_name = os.path.basename(urllib.parse.unquote(self.path.split('?', 1)[0]))
                     source = resolve_source_image(requested_name)
                     if source is None:
                         self.send_error(404, 'File not found')
@@ -599,7 +651,8 @@ def main():
         else:
             handler_class = OptimizedImageHandler
 
-        with http.server.HTTPServer(("", PORT), handler_class) as httpd:
+        # Threaded, so one slow or stalled client cannot freeze the display for everyone else.
+        with http.server.ThreadingHTTPServer(("", PORT), handler_class) as httpd:
             httpd.serve_forever()
     except KeyboardInterrupt:
         logger.info("server_stopped")

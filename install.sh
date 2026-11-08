@@ -300,19 +300,27 @@ VERSION_FILE="$NTFY_CONF_DIR/installed-version.json"
 REL_VERSION="$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION" 2>/dev/null || echo unknown)"
 REL_COMMIT="unknown"
 REL_TAG="v${REL_VERSION}"
-# Git describes these files only if its working tree matches them. A release tarball unpacked over an
-# old checkout leaves that checkout's HEAD behind, so a dirty tree means RELEASE.json is the truth.
-GIT_MATCHES=0
-if git -C "$SCRIPT_DIR" rev-parse HEAD &>/dev/null \
-    && [[ -z "$(git -C "$SCRIPT_DIR" status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
-    GIT_MATCHES=1
+# RELEASE.json exists only in release tarballs (never in git), so it names what was unpacked here, even over
+# an old checkout whose tracked files happen to be unchanged. The exception is a checkout that has moved on
+# since an earlier tarball: its HEAD then holds different files from the commit RELEASE.json names.
+GIT_OK=0
+USE_RELEASE_JSON=0
+git -C "$SCRIPT_DIR" rev-parse HEAD &>/dev/null && GIT_OK=1
+if [[ -f "$SCRIPT_DIR/RELEASE.json" ]]; then
+    USE_RELEASE_JSON=1
+    if [[ $GIT_OK -eq 1 && -z "$(git -C "$SCRIPT_DIR" status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
+        MANIFEST_COMMIT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("commit") or "")' "$SCRIPT_DIR/RELEASE.json" 2>/dev/null || true)"
+        if [[ -n "$MANIFEST_COMMIT" ]] && git -C "$SCRIPT_DIR" cat-file -e "${MANIFEST_COMMIT}^{commit}" 2>/dev/null; then
+            [[ "$(git -C "$SCRIPT_DIR" rev-parse "${MANIFEST_COMMIT}^{tree}")" == "$(git -C "$SCRIPT_DIR" rev-parse 'HEAD^{tree}')" ]] || USE_RELEASE_JSON=0
+        fi
+    fi
 fi
-if [[ $GIT_MATCHES -eq 0 && -f "$SCRIPT_DIR/RELEASE.json" ]]; then
+if [[ $USE_RELEASE_JSON -eq 1 ]]; then
     REL_TAG="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("tag") or "")' "$SCRIPT_DIR/RELEASE.json" 2>/dev/null || true)"
     REL_COMMIT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("commit") or "")' "$SCRIPT_DIR/RELEASE.json" 2>/dev/null || true)"
     [[ -n "$REL_TAG" ]] || REL_TAG="v${REL_VERSION}"
     [[ -n "$REL_COMMIT" ]] || REL_COMMIT=unknown
-elif [[ $GIT_MATCHES -eq 1 ]]; then
+elif [[ $GIT_OK -eq 1 ]]; then
     REL_COMMIT="$(git -C "$SCRIPT_DIR" rev-parse HEAD)"
     REL_TAG="$(git -C "$SCRIPT_DIR" describe --tags --exact-match 2>/dev/null || echo "v${REL_VERSION}")"
 fi

@@ -623,14 +623,32 @@
         .nav-calendar {
             height: 4.5rem;
             display: flex;
-            justify-content: center;
+            justify-content: flex-start;
             align-items: center;
             gap: 0.5rem;
             flex-shrink: 0;
+            position: relative;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
             border-top: 1px solid var(--border-color);
         }
 
+        .nav-calendar::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Auto margins centre a short row and collapse to scrolling when every day and image no longer fits */
+        .nav-calendar > :first-child {
+            margin-left: auto;
+        }
+
+        .nav-calendar > :last-child {
+            margin-right: auto;
+        }
+
         .nav-day {
+            flex-shrink: 0;
             width: 3.45rem;
             height: 3.6rem;
             background: var(--secondary-light);
@@ -1197,8 +1215,12 @@
         }
 
         function updateNavCalendar() {
+            const container = document.getElementById('navCalendar');
             document.querySelectorAll('.nav-day').forEach((el, i) => {
                 el.classList.toggle('active', i === currentSlideIndex);
+                if (i === currentSlideIndex && container) {
+                    container.scrollLeft = el.offsetLeft - (container.clientWidth - el.offsetWidth) / 2;
+                }
             });
         }
 

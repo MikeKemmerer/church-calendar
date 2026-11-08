@@ -140,7 +140,7 @@ def _lock(images_dir: Path) -> Iterator[None]:
 
 
 def _validate_schedule(data: Any) -> None:
-    """Raise ValueError unless ``data`` is a schedule whose entries are objects keyed by bare file names."""
+    """Raise ValueError unless ``data`` is a schedule of well-formed entries keyed by bare file names."""
     if not isinstance(data, dict):
         raise ValueError("schedule must be an object")
     images = data.get("images", {})
@@ -149,6 +149,25 @@ def _validate_schedule(data: Any) -> None:
     for name, entry in images.items():
         if not name or name in (".", "..") or Path(name).name != name or not isinstance(entry, dict):
             raise ValueError(f"invalid schedule entry {name!r}")
+        for field in ("show_from", "remove_after"):
+            value = entry.get(field)
+            if value not in (None, ""):
+                if not isinstance(value, str):
+                    raise ValueError(f"{field} of {name!r} must be a date string")
+                parse_day(value, field)
+        if not isinstance(entry.get("auto_archive", False), bool):
+            raise ValueError(f"auto_archive of {name!r} must be true or false")
+
+
+def _keep_malformed_copy(path: Path) -> None:
+    """Move a malformed schedule aside under a name that is never reused; failure propagates so it is not overwritten."""
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    for attempt in range(1000):
+        destination = path.with_name(f"{path.name}.corrupt-{stamp}" + (f"-{attempt}" if attempt else ""))
+        if not destination.exists():
+            os.replace(path, destination)
+            return
+    raise OSError(f"no free name to keep a copy of {path}")
 
 
 def _load(images_dir: Path, repair: bool = False) -> dict[str, Any]:
@@ -162,8 +181,7 @@ def _load(images_dir: Path, repair: bool = False) -> dict[str, Any]:
     except ValueError:
         if repair:
             logger.error("image_schedule_malformed file=%s; keeping a copy and rebuilding from file names", path)
-            with contextlib.suppress(OSError):
-                os.replace(path, images_dir / f"{SCHEDULE_NAME}.corrupt-{datetime.now():%Y%m%d-%H%M%S}")
+            _keep_malformed_copy(path)
         data = {}
     return {"version": 1, "images": data.get("images", {})}
 

@@ -235,6 +235,70 @@ class ImageScheduleTests(unittest.TestCase):
         (d / "noext").write_bytes(b"x")
         self.assertEqual(sched.unique_destination(d, "noext"), d / "noext_1")
 
+    def test_invalid_field_values_are_kept_as_a_backup(self):
+        self.touch("A.png")
+        base = {"show_from": None, "remove_after": "2020-01-01", "auto_archive": True, "origin": "ui"}
+        for field, bad in (("auto_archive", "false"), ("remove_after", "2020-13-45"), ("show_from", 20260101), ("remove_after", "soon")):
+            entry = {**base, field: bad}
+            text = json.dumps({"images": {"A.png": entry}})
+            (self.dir / sched.SCHEDULE_NAME).write_text(text)
+            sched.sync(self.dir)
+            backups = list(self.dir.glob(sched.SCHEDULE_NAME + ".corrupt-*"))
+            self.assertEqual(len(backups), 1, (field, bad))
+            self.assertEqual(backups[0].read_text(), text)
+            backups[0].unlink()
+        self.assertEqual(sched.active_names(self.dir, TODAY), {"A.png"})
+
+    def test_two_repairs_in_the_same_instant_keep_both_backups(self):
+        self.touch("A.png")
+        frozen = datetime(2026, 1, 1, 0, 0, 0, 0)
+        with mock.patch.object(sched, "datetime") as fake:
+            fake.now.return_value = frozen
+            for text in ("{first", "{second"):
+                (self.dir / sched.SCHEDULE_NAME).write_text(text)
+                sched.sync(self.dir)
+        kept = sorted(p.read_text() for p in self.dir.glob(sched.SCHEDULE_NAME + ".corrupt-*"))
+        self.assertEqual(kept, ["{first", "{second"])
+
+    def test_failed_backup_aborts_instead_of_overwriting_the_bad_file(self):
+        self.touch("A.png")
+        (self.dir / sched.SCHEDULE_NAME).write_text("{not json")
+        with mock.patch.object(sched.os, "replace", side_effect=PermissionError("cannot rename")):
+            with self.assertRaises(PermissionError):
+                sched.sync(self.dir)
+        self.assertEqual((self.dir / sched.SCHEDULE_NAME).read_text(), "{not json")
+
+    def test_image_cache_lookup_survives_a_concurrent_clear(self):
+        import image_sources
+
+        manager = image_sources.ImageSourceManager()
+        image_sources.IMAGE_CACHE.clear()
+        self.assertIsNone(manager._get_valid_cache("all_images"))
+        manager._set_cache("all_images", [])
+        self.assertEqual(manager._get_valid_cache("all_images"), [])
+        image_sources.IMAGE_CACHE.clear()
+        self.assertIsNone(manager._get_valid_cache("all_images"))
+
+    def test_mixed_case_extensions_are_found_once(self):
+        import image_sources
+
+        for name in ("Poster.Png", "photo.JPG", "plain.png", "notes.txt"):
+            self.touch(name)
+        manager = image_sources.ImageSourceManager()
+        manager.config = {"local_files": {"enabled": True, "folder_path": str(self.dir)}}
+        shown = sorted(Path(i["file_path"]).name for i in manager._fetch_local_images())
+        self.assertEqual(shown, ["Poster.Png", "photo.JPG", "plain.png"])
+
+    def test_image_urls_quote_file_names(self):
+        import image_sources
+
+        self.touch("2026-12-01 Sale #1 100%.png")
+        manager = image_sources.ImageSourceManager()
+        manager.config = {"local_files": {"enabled": True, "folder_path": str(self.dir)}}
+        [image] = manager._fetch_local_images()
+        self.assertEqual(image["url"], "/source-images/2026-12-01%20Sale%20%231%20100%25.png")
+        self.assertEqual(image["thumbnail"], image["url"])
+
     def test_cli_list_reports_states(self):
         self.touch("2026-11-30 Old.png")
         self.touch("Always.png")
