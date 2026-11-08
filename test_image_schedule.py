@@ -160,6 +160,35 @@ class ImageScheduleTests(unittest.TestCase):
         self.assertEqual(len(backups), 1)
         self.assertEqual(backups[0].read_text(), "{not json")
 
+    def test_stored_end_before_start_is_treated_as_malformed(self):
+        self.touch("2026-12-31 A [auto-archive].png")
+        bad = {"images": {"2026-12-31 A [auto-archive].png": {"show_from": "2026-12-20", "remove_after": "2026-11-15", "auto_archive": True}}}
+        (self.dir / sched.SCHEDULE_NAME).write_text(json.dumps(bad))
+        self.assertEqual(sched.sweep(self.dir, TODAY), [])
+        self.assertEqual(len(list(self.dir.glob(sched.SCHEDULE_NAME + ".corrupt-*"))), 1)
+        self.assertEqual(sched.sync(self.dir)["images"]["2026-12-31 A [auto-archive].png"]["remove_after"], "2026-12-31")
+
+    @unittest.skipUnless(importlib.util.find_spec("PIL"), "Pillow not installed")
+    def test_derivatives_are_replaced_whole_and_readable(self):
+        from PIL import Image
+        import image_optimizer
+
+        images = self.dir / "images"
+        images.mkdir()
+        Image.new("RGB", (900, 700)).save(images / "poster.png")
+        work = {"optimized_dir": str(self.dir / "optimized"), "thumbnail_dir": str(self.dir / "thumbs"),
+                "cache_file": str(self.dir / "cache.json")}
+        with mock.patch.dict(image_optimizer.OPTIMIZATION_CONFIG, work):
+            optimizer = image_optimizer.ImageOptimizer()
+            with mock.patch.object(image_optimizer.os, "replace", wraps=os.replace) as replace:
+                optimizer.optimize_all_images(images)
+        published = sorted(Path(call.args[1]).parent.name for call in replace.call_args_list)
+        self.assertEqual(published, ["optimized", "thumbs"])
+        for folder in ("optimized", "thumbs"):
+            names = [p.name for p in (self.dir / folder).iterdir()]
+            self.assertEqual(names, ["poster.png.webp"], folder)
+            self.assertEqual((self.dir / folder / "poster.png.webp").stat().st_mode & 0o777, 0o644)
+
     def test_read_only_folder_still_enforces_the_stored_schedule(self):
         self.touch("Always.png")
         self.touch("Future.png")

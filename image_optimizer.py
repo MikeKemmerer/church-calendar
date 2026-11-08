@@ -7,6 +7,9 @@ Includes thumbnail generation and orphaned file cleanup
 
 import json
 import io
+import os
+import tempfile
+import contextlib
 import time
 import argparse
 import logging
@@ -136,7 +139,7 @@ class ImageOptimizer:
                 
                 # Save optimized version
                 optimized_path = self._get_optimized_path(image_path)
-                img.save(optimized_path, format=self.config["format"], quality=self.config["quality"])
+                self._save_atomically(img, optimized_path, format=self.config["format"], quality=self.config["quality"])
                 
                 # Update cache
                 self.cache[str(image_path)] = {
@@ -153,6 +156,19 @@ class ImageOptimizer:
         except Exception as e:
             logger.error(f"Failed to optimize image {image_path}: {e}")
             return None
+    
+    def _save_atomically(self, img, path, **save_args):
+        """Save to a hidden temporary file beside ``path``, then rename it in, so readers never get a partial image"""
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "wb") as f:
+                img.save(f, **save_args)
+            os.chmod(tmp, 0o644)  # the dashboard reads previews as another user
+            os.replace(tmp, path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+            raise
     
     def _generate_thumbnail(self, optimized_path, original_path):
         """Generate thumbnail from optimized image"""
@@ -173,7 +189,7 @@ class ImageOptimizer:
                 img.thumbnail(self.config["thumbnail_size"], RESAMPLE_LANCZOS)
                 
                 # Save thumbnail
-                img.save(thumbnail_path, format=self.config["format"], quality=70)
+                self._save_atomically(img, thumbnail_path, format=self.config["format"], quality=70)
                 
                 logger.info(f"Generated thumbnail: {thumbnail_path.name}")
                 return str(thumbnail_path)

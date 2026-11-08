@@ -156,6 +156,9 @@ def _validate_schedule(data: Any) -> None:
                 if not isinstance(value, str):
                     raise ValueError(f"{field} of {name!r} must be a date string")
                 parse_day(value, field)
+        start, end = entry.get("show_from"), entry.get("remove_after")
+        if start and end and parse_day(end, "remove_after") < parse_day(start, "show_from"):
+            raise ValueError(f"remove_after of {name!r} is before its show_from")
         if not isinstance(entry.get("auto_archive", False), bool):
             raise ValueError(f"auto_archive of {name!r} must be true or false")
 
