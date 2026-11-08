@@ -1,0 +1,470 @@
+#!/usr/bin/env python3
+"""Per-image display schedule for the calendar's images folder.
+
+The schedule lives in ``<images>/image-schedule.json`` and is the source of truth for when each
+image is shown. Files are added to it automatically from their names: a leading
+``YYYY-MM-DD `` is the last day the image shows, and ``[auto-archive]`` just before the
+extension moves it to ``images/archive/`` the day after. Dates of 2099 or later mean "never expires".
+A ``show_from`` start date can only be set through this module (or by editing the file).
+
+Every change takes one lock (``<images>/.image-schedule.lock``) so the service, the sweep and
+external tools never overwrite each other. Set IMAGE_SCHEDULE_LOCK_HELD=1 when the caller
+already holds that lock.
+"""
+from __future__ import annotations
+
+import argparse
+import contextlib
+import fcntl
+import json
+import logging
+import os
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Any, Iterator
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover
+    ZoneInfo = None
+
+logger = logging.getLogger("church-calendar.image-schedule")
+
+SCHEDULE_NAME = "image-schedule.json"
+LOCK_NAME = ".image-schedule.lock"
+ARCHIVE_DIR = "archive"
+DEFAULT_TIMEZONE = "America/Los_Angeles"
+DEFAULT_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp")
+NEVER_EXPIRES_YEAR = 2099
+AUTO_ARCHIVE_MARKER = "[auto-archive]"
+
+_NAME_RE = re.compile(
+    r"^(?P<date>\d{4}-\d{2}-\d{2}) (?P<rest>.+?)(?P<auto> \[auto-archive\])?(?P<ext>\.[A-Za-z0-9]+)$",
+    re.IGNORECASE,
+)
+
+
+class ScheduleError(ValueError):
+    pass
+
+
+def parse_day(value: Any, field: str) -> date | None:
+    if value in (None, ""):
+        return None
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError as exc:
+        raise ScheduleError(f"{field} must be YYYY-MM-DD, got {value!r}") from exc
+
+
+def entry_from_filename(name: str) -> dict[str, Any]:
+    """Seed schedule values from the file name; files without a date prefix never expire."""
+    entry: dict[str, Any] = {"show_from": None, "remove_after": None, "auto_archive": False, "origin": "manual"}
+    match = _NAME_RE.match(name)
+    if not match:
+        return entry
+    entry["origin"] = "filename"
+    entry["auto_archive"] = bool(match.group("auto"))
+    try:
+        end = date.fromisoformat(match.group("date"))
+    except ValueError:
+        return entry
+    if end.year < NEVER_EXPIRES_YEAR:
+        entry["remove_after"] = end.isoformat()
+    return entry
+
+
+def is_active(entry: dict[str, Any], today: date) -> bool:
+    start = parse_day(entry.get("show_from"), "show_from")
+    end = parse_day(entry.get("remove_after"), "remove_after")
+    if start and today < start:
+        return False
+    if end and today > end:
+        return False
+    return True
+
+
+def state_of(entry: dict[str, Any], today: date) -> str:
+    start = parse_day(entry.get("show_from"), "show_from")
+    end = parse_day(entry.get("remove_after"), "remove_after")
+    if start and today < start:
+        return "scheduled"
+    if end and today > end:
+        return "expired"
+    return "persistent" if end is None and start is None else "active"
+
+
+def today_local(timezone_name: str = DEFAULT_TIMEZONE) -> date:
+    if ZoneInfo is not None:
+        try:
+            return datetime.now(ZoneInfo(timezone_name)).date()
+        except Exception:
+            pass
+    return datetime.now().astimezone().date()
+
+
+def seconds_until_hour(hour: int, timezone_name: str = DEFAULT_TIMEZONE, now: datetime | None = None) -> float:
+    """Real seconds from now until the next local time of day at ``hour``:00 (DST-safe)."""
+    tz = None
+    if ZoneInfo is not None:
+        try:
+            tz = ZoneInfo(timezone_name)
+        except Exception:
+            tz = None
+    if now is None:
+        now = datetime.now(tz) if tz else datetime.now().astimezone()
+    target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    # Subtracting aware datetimes that share a ZoneInfo measures wall-clock time, so compare timestamps.
+    return target.timestamp() - now.timestamp()
+
+
+@contextlib.contextmanager
+def _lock(images_dir: Path) -> Iterator[None]:
+    if os.environ.get("IMAGE_SCHEDULE_LOCK_HELD") == "1":
+        yield
+        return
+    images_dir.mkdir(parents=True, exist_ok=True)
+    with open(images_dir / LOCK_NAME, "a+") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def _validate_schedule(data: Any) -> None:
+    """Raise ValueError unless ``data`` is a schedule of well-formed entries keyed by bare file names."""
+    if not isinstance(data, dict):
+        raise ValueError("schedule must be an object")
+    images = data.get("images", {})
+    if not isinstance(images, dict):
+        raise ValueError("images must be an object")
+    for name, entry in images.items():
+        if not name or name in (".", "..") or Path(name).name != name or not isinstance(entry, dict):
+            raise ValueError(f"invalid schedule entry {name!r}")
+        for field in ("show_from", "remove_after"):
+            value = entry.get(field)
+            if value not in (None, ""):
+                if not isinstance(value, str):
+                    raise ValueError(f"{field} of {name!r} must be a date string")
+                parse_day(value, field)
+        start, end = entry.get("show_from"), entry.get("remove_after")
+        if start and end and parse_day(end, "remove_after") < parse_day(start, "show_from"):
+            raise ValueError(f"remove_after of {name!r} is before its show_from")
+        if not isinstance(entry.get("auto_archive", False), bool):
+            raise ValueError(f"auto_archive of {name!r} must be true or false")
+
+
+def _keep_malformed_copy(path: Path) -> None:
+    """Move a malformed schedule aside under a name that is never reused; failure propagates so it is not overwritten."""
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    for attempt in range(1000):
+        destination = path.with_name(f"{path.name}.corrupt-{stamp}" + (f"-{attempt}" if attempt else ""))
+        if not destination.exists():
+            os.replace(path, destination)
+            return
+    raise OSError(f"no free name to keep a copy of {path}")
+
+
+def _load(images_dir: Path, repair: bool = False) -> dict[str, Any]:
+    """Read the schedule; a missing or malformed file reads as empty, any other read error propagates."""
+    path = images_dir / SCHEDULE_NAME
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        _validate_schedule(data)
+    except FileNotFoundError:
+        data = {}
+    except ValueError:
+        if repair:
+            logger.error("image_schedule_malformed file=%s; keeping a copy and rebuilding from file names", path)
+            _keep_malformed_copy(path)
+        data = {}
+    return {"version": 1, "images": data.get("images", {})}
+
+
+def _save(images_dir: Path, data: dict[str, Any]) -> None:
+    fd, tmp = tempfile.mkstemp(prefix=".image-schedule-", dir=images_dir)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, images_dir / SCHEDULE_NAME)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+def _image_files(images_dir: Path, extensions: tuple[str, ...]) -> list[str]:
+    exts = {e.lower() for e in extensions}
+    try:
+        entries = list(images_dir.iterdir())
+    except FileNotFoundError:
+        return []
+    return sorted(p.name for p in entries if p.is_file() and p.suffix.lower() in exts)
+
+
+def _sync_locked(images_dir: Path, extensions: tuple[str, ...]) -> dict[str, Any]:
+    data = _load(images_dir, repair=True)
+    images = data["images"]
+    present = set(_image_files(images_dir, extensions))
+    changed = False
+    for name in present - images.keys():
+        images[name] = entry_from_filename(name)
+        changed = True
+    # Prune only files that are really gone, not ones an extension filter happens to hide.
+    for name in [n for n in images if not (images_dir / n).is_file()]:
+        del images[name]
+        changed = True
+    if changed:
+        _save(images_dir, data)
+    return data
+
+
+def sync(images_dir: Path | str, extensions: tuple[str, ...] = DEFAULT_EXTENSIONS) -> dict[str, Any]:
+    """Add newly seen files (seeded from their names), drop entries for files that are gone."""
+    images_dir = Path(images_dir)
+    with _lock(images_dir):
+        return _sync_locked(images_dir, extensions)
+
+
+def active_names(images_dir: Path | str, today: date, extensions: tuple[str, ...] = DEFAULT_EXTENSIONS) -> set[str]:
+    data = sync(images_dir, extensions)
+    return {name for name, entry in data["images"].items() if is_active(entry, today)}
+
+
+def visible_names(images_dir: Path | str, today: date, extensions: tuple[str, ...] = DEFAULT_EXTENSIONS) -> set[str]:
+    """Names to show today; on a read-only folder (no lock or schedule writes) the stored schedule still applies."""
+    try:
+        return active_names(images_dir, today, extensions)
+    except OSError as exc:
+        logger.warning("image_schedule_read_only error=%s; using the stored schedule without writing", exc)
+        rows = listing(images_dir, today, extensions, read_only=True)
+        return {row["filename"] for row in rows if row["state"] in ("active", "persistent")}
+
+
+def set_entry(
+    images_dir: Path | str,
+    name: str,
+    *,
+    show_from: str | None = None,
+    remove_after: str | None = None,
+    auto_archive: bool = False,
+    persistent: bool = False,
+    extensions: tuple[str, ...] = DEFAULT_EXTENSIONS,
+) -> dict[str, Any]:
+    images_dir = Path(images_dir)
+    if Path(name).name != name or not name:
+        raise ScheduleError("name must be a bare file name")
+    start = parse_day(show_from, "show_from")
+    end = parse_day(remove_after, "remove_after")
+    if persistent:
+        start, end, auto_archive = None, None, False
+    elif auto_archive and end is None:
+        raise ScheduleError("auto-archive needs a remove-after date")
+    if start and end and end < start:
+        raise ScheduleError("remove-after cannot be before show-from")
+    with _lock(images_dir):
+        data = _sync_locked(images_dir, extensions)
+        if name not in data["images"]:
+            raise ScheduleError(f"{name} is not in the images folder")
+        entry = {
+            "show_from": start.isoformat() if start else None,
+            "remove_after": end.isoformat() if end else None,
+            "auto_archive": bool(auto_archive),
+            "origin": "ui",
+        }
+        data["images"][name] = entry
+        _save(images_dir, data)
+        return entry
+
+
+def drop_entry(images_dir: Path | str, name: str) -> None:
+    images_dir = Path(images_dir)
+    with _lock(images_dir):
+        data = _load(images_dir, repair=True)
+        if data["images"].pop(name, None) is not None:
+            _save(images_dir, data)
+
+
+def unique_destination(directory: Path, name: str) -> Path:
+    """``directory/name``, or ``Name_1.ext``, ``Name_2.ext`` ... (before any ' [auto-archive]' marker) if taken."""
+    # lexists, so a dangling symlink still counts as taken and is never replaced.
+    target = directory / name
+    if not os.path.lexists(target):
+        return target
+    stem, ext = os.path.splitext(name)
+    marker = ""
+    tail = " " + AUTO_ARCHIVE_MARKER
+    if stem.lower().endswith(tail):
+        marker, stem = stem[-len(tail):], stem[:-len(tail)]
+    counter = 1
+    while os.path.lexists(directory / f"{stem}_{counter}{marker}{ext}"):
+        counter += 1
+    return directory / f"{stem}_{counter}{marker}{ext}"
+
+
+def sweep(images_dir: Path | str, today: date, extensions: tuple[str, ...] = DEFAULT_EXTENSIONS) -> list[str]:
+    """Move auto-archive images whose last day has passed into images/archive/."""
+    images_dir = Path(images_dir)
+    archived: list[str] = []
+    with _lock(images_dir):
+        data = _sync_locked(images_dir, extensions)
+        for name, entry in sorted(data["images"].items()):
+            end = parse_day(entry.get("remove_after"), "remove_after")
+            if not (entry.get("auto_archive") and end and today > end):
+                continue
+            source = images_dir / name
+            if not source.is_file():
+                continue
+            archive = images_dir / ARCHIVE_DIR
+            archive.mkdir(exist_ok=True)
+            target = unique_destination(archive, name)
+            shutil.move(str(source), str(target))
+            del data["images"][name]
+            archived.append(name)
+        if archived:
+            _save(images_dir, data)
+    return archived
+
+
+def listing(
+    images_dir: Path | str,
+    today: date,
+    extensions: tuple[str, ...] = DEFAULT_EXTENSIONS,
+    read_only: bool = False,
+) -> list[dict[str, Any]]:
+    """Every image with its schedule and state; read_only never writes (for callers without write access)."""
+    images_dir = Path(images_dir)
+    if read_only:
+        stored = _load(images_dir)["images"]
+        data = {"images": {n: stored.get(n) or entry_from_filename(n) for n in _image_files(images_dir, extensions)}}
+    else:
+        data = sync(images_dir, extensions)
+    rows = []
+    for name, entry in sorted(data["images"].items()):
+        rows.append({"filename": name, **entry, "state": state_of(entry, today)})
+    return rows
+
+
+def is_within(path: Path, folder: Path) -> bool:
+    """True if resolved ``path`` is ``folder`` or below it (Path.is_relative_to needs Python 3.9)."""
+    return path == folder or folder in path.parents
+
+
+def open_inside(folder: Path | str, name: str):
+    """Open ``folder/name`` for binary reading if it is a regular file inside ``folder`` (symlinks too), else None.
+
+    The opened descriptor itself is checked, so swapping the name for an escaping symlink after the
+    check cannot change what is read.
+    """
+    if not name or os.path.basename(name) != name or name.startswith("."):
+        return None
+    path = os.path.join(folder, name)
+    try:
+        base = Path(folder).resolve(strict=True)
+        # Non-blocking, so a FIFO dropped into the folder cannot hang the reader.
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    except (OSError, RuntimeError):
+        return None
+    try:
+        opened = os.fstat(fd)
+        try:
+            real = Path(os.readlink(f"/proc/self/fd/{fd}"))
+            same = True
+        except OSError:  # no /proc: check the resolved path is still the opened file
+            real = Path(os.path.realpath(path))
+            same = os.path.samestat(opened, os.stat(real, follow_symlinks=False))
+        if stat.S_ISREG(opened.st_mode) and same and is_within(real, base):
+            os.set_blocking(fd, True)
+            return os.fdopen(fd, "rb")
+    except OSError:
+        pass
+    os.close(fd)
+    return None
+
+
+def resolve_images_dir(explicit: str | None) -> Path:
+    if explicit:
+        return Path(explicit)
+    base = Path(__file__).resolve().parent
+    folder = "./images/"
+    try:
+        folder = json.loads((base / "config.json").read_text(encoding="utf-8")).get("local_files", {}).get("folder_path", folder)
+    except (OSError, ValueError):
+        pass
+    path = Path(folder)
+    return path if path.is_absolute() else base / path
+
+
+def config_timezone() -> str:
+    try:
+        cfg = json.loads((Path(__file__).resolve().parent / "config.json").read_text(encoding="utf-8"))
+        return str(cfg.get("calendar", {}).get("timezone") or DEFAULT_TIMEZONE)
+    except (OSError, ValueError):
+        return DEFAULT_TIMEZONE
+
+
+def run_optimizer(images_dir: Path) -> None:
+    """Regenerate derivatives so files that left images/ lose their optimized copies."""
+    script = Path(__file__).resolve().parent / "image_optimizer.py"
+    if script.is_file():
+        subprocess.run([sys.executable, str(script), "--images-dir", str(images_dir)], cwd=script.parent, check=False)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Manage the calendar image display schedule")
+    parser.add_argument("--images-dir", help="images folder (default: from config.json)")
+    parser.add_argument("--today", help="override today's date (YYYY-MM-DD), for testing")
+    sub = parser.add_subparsers(dest="command", required=True)
+    p_list = sub.add_parser("list", help="print every image with its schedule and state as JSON")
+    p_list.add_argument("--read-only", action="store_true", help="never write the schedule file")
+    sub.add_parser("sync", help="add new files to the schedule and drop missing ones")
+    p_set = sub.add_parser("set", help="set the schedule for one image")
+    p_set.add_argument("filename")
+    p_set.add_argument("--show-from")
+    p_set.add_argument("--remove-after")
+    p_set.add_argument("--auto-archive", action="store_true")
+    p_set.add_argument("--persistent", action="store_true")
+    p_drop = sub.add_parser("drop", help="forget the schedule entry for one image")
+    p_drop.add_argument("filename")
+    sub.add_parser("sweep", help="archive expired auto-archive images")
+    args = parser.parse_args(argv)
+
+    images_dir = resolve_images_dir(args.images_dir)
+    today = parse_day(args.today, "--today") if args.today else today_local(config_timezone())
+    try:
+        if args.command == "list":
+            print(json.dumps({"today": today.isoformat(), "images": listing(images_dir, today, read_only=args.read_only)}))
+        elif args.command == "sync":
+            sync(images_dir)
+        elif args.command == "set":
+            entry = set_entry(
+                images_dir, args.filename, show_from=args.show_from, remove_after=args.remove_after,
+                auto_archive=args.auto_archive, persistent=args.persistent,
+            )
+            print(json.dumps(entry))
+        elif args.command == "drop":
+            drop_entry(images_dir, args.filename)
+        elif args.command == "sweep":
+            archived = sweep(images_dir, today)
+            if archived:
+                run_optimizer(images_dir)
+            print(json.dumps({"archived": archived}))
+    except ScheduleError as exc:
+        print(json.dumps({"error": str(exc)}), file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

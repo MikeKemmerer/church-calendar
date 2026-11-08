@@ -9,7 +9,10 @@ import json
 import time
 from datetime import datetime, timedelta
 import logging
-import glob
+import urllib.parse
+from pathlib import Path
+
+import image_schedule
 
 logging.Formatter.converter = time.gmtime
 logging.basicConfig(
@@ -62,8 +65,9 @@ class ImageSourceManager:
         cache_key = "all_images"
         
         # Check cache
-        if self._is_cache_valid(cache_key):
-            return self._get_from_cache(cache_key)
+        cached = self._get_valid_cache(cache_key)
+        if cached is not None:
+            return cached
         
         all_images = []
         
@@ -82,17 +86,14 @@ class ImageSourceManager:
         
         return all_images
     
-    def _is_cache_valid(self, key):
-        """Check if cache entry is still valid"""
-        if key not in IMAGE_CACHE:
-            return False
-        
-        cache_time = IMAGE_CACHE[key]["timestamp"]
-        return (datetime.now() - cache_time).total_seconds() < CACHE_TTL
-    
-    def _get_from_cache(self, key):
-        """Get data from cache"""
-        return IMAGE_CACHE[key]["data"]
+    def _get_valid_cache(self, key):
+        """The cached data if still fresh, else None. One lookup, because the nightly sweep can clear the cache at any time."""
+        entry = IMAGE_CACHE.get(key)
+        if entry is None:
+            return None
+        if (datetime.now() - entry["timestamp"]).total_seconds() >= CACHE_TTL:
+            return None
+        return entry["data"]
     
     def _set_cache(self, key, data):
         """Set data in cache"""
@@ -121,63 +122,88 @@ class ImageSourceManager:
         if not os.path.exists(folder_path):
             logger.warning(f"Local images folder not found: {folder_path}")
             return images
+
+        # Originals come from the app's /images/ route unless the configured folder lives elsewhere.
+        same_folder = os.path.realpath(folder_path) == os.path.realpath(os.path.join(base_dir, "images"))
+        originals_prefix = "/images/" if same_folder else "/source-images/"
         
-        # Build glob pattern for file extensions
-        pattern = "*"
-        
-        # Find all image files
-        for ext in file_extensions:
-            search_pattern = os.path.join(folder_path, pattern + ext.lower())
-            files = glob.glob(search_pattern, recursive=recursive)
-            
-            # Also check for uppercase extensions
-            search_pattern_upper = os.path.join(folder_path, pattern + ext.upper())
-            files_upper = glob.glob(search_pattern_upper, recursive=recursive)
-            files.extend(files_upper)
-            
-            for file_path in files:
-                try:
-                    # Get file information
-                    file_name = os.path.basename(file_path)
-                    file_size = os.path.getsize(file_path)
-                    file_mtime = os.path.getmtime(file_path)
-                    file_date = datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d %H:%M:%S')
-                    
-                    # Check if optimized version exists
-                    optimized_path = os.path.join(base_dir, "images", "optimized", file_name + ".webp")
-                    if os.path.exists(optimized_path):
-                        # Use optimized WebP version
-                        file_url = f"/optimized/{file_name}.webp"
-                    else:
-                        # Fall back to original image in images folder
-                        file_url = f"/images/{file_name}"
-                    
-                    # Check if thumbnail exists
-                    thumbnail_path = os.path.join(base_dir, "images", "thumbnails", file_name + ".webp")
-                    if os.path.exists(thumbnail_path):
-                        thumbnail_url = f"/thumbnails/{file_name}.webp"
-                    else:
-                        # Fall back to optimized image for thumbnail, or original if no optimized version
-                        if os.path.exists(optimized_path):
-                            thumbnail_url = f"/optimized/{file_name}.webp"
-                        else:
-                            thumbnail_url = f"/images/{file_name}"
-                    
-                    images.append({
-                        'url': file_url,
-                        'thumbnail': thumbnail_url,
-                        'source': 'Local Files',
-                        'title': '',  # No title or filename shown
-                        'timestamp': file_date,
-                        'file_size': file_size,
-                        'file_path': file_path
-                    })
-                    
-                except (OSError, IOError) as e:
-                    logger.warning(f"Could not access file {file_path}: {e}")
+        # Build the set of wanted extensions (matched without regard to case, like the schedule does)
+        wanted_extensions = {e.lower() for e in file_extensions}
+
+        # Only images inside their schedule window are shown; if the schedule can't be read, show all.
+        active_names = None
+        try:
+            timezone_name = self.config.get("calendar", {}).get("timezone") or image_schedule.DEFAULT_TIMEZONE
+            active_names = image_schedule.visible_names(
+                folder_path, image_schedule.today_local(timezone_name), tuple(file_extensions)
+            )
+        except Exception as e:
+            logger.error(f"Image schedule unavailable, showing every image: {e}")
+        hidden = 0
+
+        # One directory listing: each file is seen once, whatever the case of its extension
+        try:
+            names = sorted(os.listdir(folder_path))
+        except OSError as e:
+            logger.error(f"Could not list local images folder {folder_path}: {e}")
+            names = []
+        # Same rule as the image routes: a symlink leading out of the folder is not one of its images.
+        real_folder = Path(os.path.realpath(folder_path))
+        files = [
+            os.path.join(folder_path, n)
+            for n in names
+            if os.path.splitext(n)[1].lower() in wanted_extensions
+            and os.path.isfile(os.path.join(folder_path, n))
+            and image_schedule.is_within(Path(os.path.realpath(os.path.join(folder_path, n))), real_folder)
+        ]
+
+        for file_path in files:
+            try:
+                # Get file information
+                file_name = os.path.basename(file_path)
+                if active_names is not None and file_name not in active_names:
+                    hidden += 1
                     continue
+                url_name = urllib.parse.quote(file_name)
+                file_size = os.path.getsize(file_path)
+                file_mtime = os.path.getmtime(file_path)
+                file_date = datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                    
+                # Check if optimized version exists
+                optimized_path = os.path.join(base_dir, "images", "optimized", file_name + ".webp")
+                if os.path.exists(optimized_path):
+                    # Use optimized WebP version
+                    file_url = f"/optimized/{url_name}.webp"
+                else:
+                    # Fall back to original image in images folder
+                    file_url = f"{originals_prefix}{url_name}"
+                    
+                # Check if thumbnail exists
+                thumbnail_path = os.path.join(base_dir, "images", "thumbnails", file_name + ".webp")
+                if os.path.exists(thumbnail_path):
+                    thumbnail_url = f"/thumbnails/{url_name}.webp"
+                else:
+                    # Fall back to optimized image for thumbnail, or original if no optimized version
+                    if os.path.exists(optimized_path):
+                        thumbnail_url = f"/optimized/{url_name}.webp"
+                    else:
+                        thumbnail_url = f"{originals_prefix}{url_name}"
+                    
+                images.append({
+                    'url': file_url,
+                    'thumbnail': thumbnail_url,
+                    'source': 'Local Files',
+                    'title': '',  # No title or filename shown
+                    'timestamp': file_date,
+                    'file_size': file_size,
+                    'file_path': file_path
+                })
+                    
+            except (OSError, IOError) as e:
+                logger.warning(f"Could not access file {file_path}: {e}")
+                continue
         
-        logger.info(f"Local files folder '{folder_path}': {len(images)} images found")
+        logger.info(f"Local files folder '{folder_path}': {len(images)} images found, {hidden} outside their schedule")
         return images
     
 

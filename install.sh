@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # install.sh — Installs the St. Demetrios Church Calendar display on a Raspberry Pi.
 #
-# Idempotent: safe to re-run for upgrades. Installs Python dependencies, deploys the
+# Idempotent and upgrade-safe: safe to re-run. Installs Python dependencies, deploys the
 # app to a target directory, seeds a local config.json if missing, and registers a
-# systemd service so the calendar starts on boot.
+# systemd service so the calendar starts on boot. Re-running never deletes anything in
+# the install directory: images/, config.json, caches and .git are left exactly as they are.
 #
 # Usage:
 #   sudo ./install.sh                 # install/upgrade with defaults
@@ -13,6 +14,7 @@
 # Environment overrides:
 #   RUN_USER  Service user (default: non-root user that invoked sudo)
 #   DEST      Install directory (default: /opt/church-calendar for new installs)
+#   PORT      HTTP port the server listens on (informational; default: 8000)
 #   PORT      HTTP port the server listens on (informational; default: 8000)
 #
 # Repair mode:
@@ -174,25 +176,62 @@ apt-get install -y python3 python3-pil python3-dateutil python3-requests python3
 
 configure_apparmor
 
+WAS_ACTIVE=0
+if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    WAS_ACTIVE=1
+fi
+
+# If the install fails after the service was stopped, bring the old one back.
+restart_previous_service_on_failure() {
+    local rc=$?
+    if [[ $rc -ne 0 && $WAS_ACTIVE -eq 1 ]]; then
+        echo "Install failed (exit $rc); restarting the previously running service." >&2
+        systemctl start "$SERVICE_NAME" 2>/dev/null || true
+    fi
+}
+trap restart_previous_service_on_failure EXIT
+
+# Write a systemd unit from stdin, keeping a timestamped backup if it replaces a different file.
+write_unit() {
+    local path="$1" tmp
+    tmp="$(mktemp)"
+    cat > "$tmp"
+    if [[ -f "$path" ]] && ! cmp -s "$tmp" "$path"; then
+        cp -p "$path" "${path}.bak-$(date +%Y%m%d-%H%M%S)"
+        echo "    $(basename "$path") differed from the installed copy; saved a backup next to it."
+    fi
+    install -m 644 "$tmp" "$path"
+    rm -f "$tmp"
+}
+
 echo "==> Stopping existing service (if installed)"
 systemctl stop "$SERVICE_NAME" 2>/dev/null || true
 
 echo "==> Deploying application to $DEST"
 install -d -o "$RUN_USER" -g "$RUN_GROUP" "$DEST"
 if [[ "$SCRIPT_DIR" != "$DEST" ]]; then
-    # Copy repo contents into DEST, excluding VCS metadata and local runtime files.
+    # Upgrade-safe: release files are copied over DEST but nothing in DEST is ever deleted.
+    # Local data (images/, config.json, caches, .git) is excluded so an upgrade cannot touch it.
     if command -v rsync &>/dev/null; then
-        rsync -a --delete \
+        rsync -a \
             --exclude='.git' \
             --exclude='__pycache__' \
             --exclude='*.pyc' \
             --exclude='calendar_cache.json' \
             --exclude='image_cache.json' \
             --exclude='config.json' \
+            --exclude='/images/' \
             "$SCRIPT_DIR"/ "$DEST"/
     else
-        cp -a "$SCRIPT_DIR"/. "$DEST"/
-        rm -rf "$DEST/.git"
+        tar -C "$SCRIPT_DIR" \
+            --exclude='./.git' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='./calendar_cache.json' \
+            --exclude='./image_cache.json' \
+            --exclude='./config.json' \
+            --exclude='./images' \
+            -cf - . | tar -C "$DEST" -xf -
     fi
     chown -R "$RUN_USER":"$RUN_GROUP" "$DEST"
 fi
@@ -210,10 +249,34 @@ else
     echo "    Existing config.json kept."
 fi
 
-echo "==> Writing systemd service"
-cat > "$SERVICE_FILE" <<EOF
+echo "==> Writing ntfy failure-alert unit"
+write_unit /etc/systemd/system/church-calendar-ntfy-failure.service <<EOF
 [Unit]
-Description=St. Demetrios Church Calendar Display
+Description=Send an ntfy alert that church-calendar failed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -c "import sys; sys.path.insert(0, '${DEST}'); import ntfy_notify; ntfy_notify.send('church-calendar.service failed', title='church-calendar (%H)', priority='high', dedupe_key='unit-failed:church-calendar.service')"
+EOF
+
+# The alert topic is a secret. Keep it readable only by root and the service user's group so
+# the calendar process itself (which runs as RUN_USER) can send alerts.
+NTFY_CONF_DIR="/etc/church-calendar"
+NTFY_TOPIC_FILE="$NTFY_CONF_DIR/ntfy-topic"
+install -d -m 755 "$NTFY_CONF_DIR"
+if [[ -f "$NTFY_TOPIC_FILE" ]]; then
+    chown "root:$RUN_GROUP" "$NTFY_TOPIC_FILE"
+    chmod 640 "$NTFY_TOPIC_FILE"
+    echo "    Existing ntfy topic kept; readable by root and group $RUN_GROUP only."
+else
+    echo "    No ntfy topic set. To enable alerts, run:"
+    echo "      echo YOUR_TOPIC | sudo tee $NTFY_TOPIC_FILE >/dev/null && sudo chgrp $RUN_GROUP $NTFY_TOPIC_FILE && sudo chmod 640 $NTFY_TOPIC_FILE"
+fi
+
+echo "==> Writing systemd service"
+write_unit "$SERVICE_FILE" <<EOF
+[Unit]
+Description=Church Calendar Display
 After=network-online.target
 Wants=network-online.target
 OnFailure=church-calendar-ntfy-failure.service
@@ -232,22 +295,57 @@ ${APPARMOR_SERVICE_DIRECTIVE}
 WantedBy=multi-user.target
 EOF
 
+echo "==> Recording installed version"
+VERSION_FILE="$NTFY_CONF_DIR/installed-version.json"
+REL_VERSION="$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION" 2>/dev/null || echo unknown)"
+REL_COMMIT="unknown"
+REL_TAG="v${REL_VERSION}"
+# RELEASE.json exists only in release tarballs (never in git), so it names what was unpacked here, even over
+# an old checkout whose tracked files happen to be unchanged. The exception is a checkout that has moved on
+# since an earlier tarball: its HEAD then holds different files from the commit RELEASE.json names.
+GIT_OK=0
+USE_RELEASE_JSON=0
+git -C "$SCRIPT_DIR" rev-parse HEAD &>/dev/null && GIT_OK=1
+if [[ -f "$SCRIPT_DIR/RELEASE.json" ]]; then
+    USE_RELEASE_JSON=1
+    if [[ $GIT_OK -eq 1 && -z "$(git -C "$SCRIPT_DIR" status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
+        MANIFEST_COMMIT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("commit") or "")' "$SCRIPT_DIR/RELEASE.json" 2>/dev/null || true)"
+        if [[ -n "$MANIFEST_COMMIT" ]] && git -C "$SCRIPT_DIR" cat-file -e "${MANIFEST_COMMIT}^{commit}" 2>/dev/null; then
+            [[ "$(git -C "$SCRIPT_DIR" rev-parse "${MANIFEST_COMMIT}^{tree}")" == "$(git -C "$SCRIPT_DIR" rev-parse 'HEAD^{tree}')" ]] || USE_RELEASE_JSON=0
+        fi
+    fi
+fi
+if [[ $USE_RELEASE_JSON -eq 1 ]]; then
+    REL_TAG="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("tag") or "")' "$SCRIPT_DIR/RELEASE.json" 2>/dev/null || true)"
+    REL_COMMIT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("commit") or "")' "$SCRIPT_DIR/RELEASE.json" 2>/dev/null || true)"
+    [[ -n "$REL_TAG" ]] || REL_TAG="v${REL_VERSION}"
+    [[ -n "$REL_COMMIT" ]] || REL_COMMIT=unknown
+elif [[ $GIT_OK -eq 1 ]]; then
+    REL_COMMIT="$(git -C "$SCRIPT_DIR" rev-parse HEAD)"
+    REL_TAG="$(git -C "$SCRIPT_DIR" describe --tags --exact-match 2>/dev/null || echo "v${REL_VERSION}")"
+fi
+python3 - "$VERSION_FILE" "$REL_VERSION" "$REL_TAG" "$REL_COMMIT" <<'PY'
+import json, os, sys, datetime
+path, version, tag, commit = sys.argv[1:5]
+record = {
+    "version": version,
+    "tag": tag,
+    "commit": commit,
+    "installed_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+}
+tmp = path + ".tmp"
+with open(tmp, "w") as f:
+    json.dump(record, f, indent=2)
+    f.write("\n")
+os.chmod(tmp, 0o644)
+os.replace(tmp, path)
+PY
+echo "    Installed version: $REL_TAG ($REL_COMMIT)"
+
 echo "==> Enabling and starting service"
 systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
 systemctl restart "$SERVICE_NAME"
-
-echo "==> Writing ntfy failure-alert unit"
-cat > /etc/systemd/system/church-calendar-ntfy-failure.service <<EOF
-[Unit]
-Description=Send an ntfy alert that church-calendar failed
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/python3 -c "import sys; sys.path.insert(0, '${DEST}'); import ntfy_notify; ntfy_notify.send('church-calendar.service failed', title='church-calendar (%H)', priority='high', dedupe_key='unit-failed:church-calendar.service')"
-EOF
-systemctl daemon-reload
-echo "    (set the alert topic with: echo YOUR_TOPIC | sudo tee /etc/church-calendar/ntfy-topic)"
 
 echo ""
 echo "Done. church-calendar is installed at $DEST and running as a systemd service."

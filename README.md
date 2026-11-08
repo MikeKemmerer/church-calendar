@@ -1,4 +1,4 @@
-# St. Demetrios Greek Orthodox Church Calendar
+# Church Calendar
 
 A full-screen digital calendar display for church events, optimized for 720p displays and Raspberry Pi Zero 2W performance.
 
@@ -193,6 +193,12 @@ echo YOUR_TOPIC | sudo tee /etc/church-calendar/ntfy-topic
 Never commit this file or its value; anyone who knows an ntfy.sh topic can
 read and send to it.
 
+### Branding
+
+The heading, subtitle and browser title come from the `branding` section of `config.json`
+(`title`, `subtitle`, `page_title`; see `CONFIG_GUIDE.md`). Nothing church-specific is hard-coded
+in the page, so another church only needs to change those values.
+
 ### Calendar Configuration
 
 Calendar IDs are configured in `config.json` (not tracked in git). To set up:
@@ -233,6 +239,32 @@ The system supports displaying images from a local folder that can be shared via
    - Copy new images to the folder
    - Remove old images as needed
    - System automatically detects changes
+
+#### Image schedule (start date, end date, auto-archive)
+
+Each image can have a start date, an end date, and an auto-archive flag. Dates are
+calendar days in the configured timezone; an image is shown **through** its end date and
+hidden the next day.
+
+- **Filename convention** (used when a file is first seen): a leading `YYYY-MM-DD ` is the
+  end date, e.g. `2026-12-14 Rummage Sale.png`. A year of 2099 or later means "never ends".
+  Adding `[auto-archive]` before the extension, e.g. `2026-12-14 Rummage Sale [auto-archive].png`,
+  moves the image to `images/archive/` the day after its end date. Files with no date are
+  always shown.
+- **Schedule file**: `images/image-schedule.json` is the source of truth once an image has
+  been seen. It is created and pruned automatically; editing dates does not rename files.
+  Start dates are only set through this file, the church-monitoring dashboard, or the CLI.
+- **Archiving** happens at service start and nightly at 03:00 local time. Nothing is ever
+  deleted; archived images are moved to `images/archive/`.
+- **CLI**: `python3 image_schedule.py list`, `set <file> --show-from D --remove-after D
+  [--auto-archive] [--persistent]`, `drop <file>`, `sweep [--today D]` (all take
+  `--images-dir`).
+
+The display's ⚙️ options menu has a read-only **View image schedule** list (upcoming, ending,
+and past-end-date images), backed by `GET /api/image-schedule`. Changes are made through the
+monitoring dashboard or the CLI, since the calendar server has no authentication.
+
+The installer records the installed release in `/etc/church-calendar/installed-version.json`.
 
 ### NFS/SMB Share Setup
 

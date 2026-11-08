@@ -10,6 +10,7 @@ import urllib.error
 import urllib.parse
 import os
 import sys
+import threading
 import time
 from datetime import datetime
 import logging
@@ -97,8 +98,11 @@ class CalendarCache:
                 "timestamp": now.isoformat(),
                 "source": "Google Calendar API"
             }
-            with open(self.cache_file, 'w') as f:
+            # Atomic, because LiveStreamScheduler may fetch this file while it is being written.
+            tmp = f"{self.cache_file}.tmp-{os.getpid()}-{threading.get_ident()}"
+            with open(tmp, 'w') as f:
                 json.dump(cache_data, f, indent=2)
+            os.replace(tmp, self.cache_file)
             self._cache_time = now
             logger.info(f"Saved calendar cache to {self.cache_file}")
         except Exception as e:

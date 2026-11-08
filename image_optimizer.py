@@ -5,15 +5,20 @@ Optimizes images at service start time for Raspberry Pi Zero 2W performance
 Includes thumbnail generation and orphaned file cleanup
 """
 
-import os
 import json
+import io
+import os
+import tempfile
+import contextlib
 import time
+import argparse
 import logging
 from datetime import datetime
 from pathlib import Path
 from PIL import Image
 import hashlib
-import glob
+
+import image_schedule
 
 try:
     RESAMPLE_LANCZOS = Image.Resampling.LANCZOS
@@ -29,15 +34,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger('church-calendar.image-optimizer')
 
-# Optimization configuration
+APP_DIR = Path(__file__).resolve().parent
+
+# Derivatives always live in the app's own images/ folder (served by the app), even when originals are on a share.
 OPTIMIZATION_CONFIG = {
     "max_width": 800,
     "max_height": 600,
     "quality": 85,
     "format": "WEBP",
-    "optimized_dir": "images/optimized",
-    "thumbnail_dir": "images/thumbnails",
-    "cache_file": "image_cache.json",
+    "optimized_dir": str(APP_DIR / "images" / "optimized"),
+    "thumbnail_dir": str(APP_DIR / "images" / "thumbnails"),
+    "cache_file": str(APP_DIR / "image_cache.json"),
     "thumbnail_size": (50, 50)
 }
 
@@ -73,24 +80,12 @@ class ImageOptimizer:
         except Exception as e:
             logger.error(f"Failed to save image cache: {e}")
     
-    def _get_file_hash(self, file_path):
-        """Generate hash of file for change detection"""
-        try:
-            with open(file_path, 'rb') as f:
-                return hashlib.md5(f.read()).hexdigest()
-        except Exception as e:
-            logger.error(f"Failed to hash file {file_path}: {e}")
-            return None
+    def _get_file_hash(self, data):
+        """Generate hash of the image bytes for change detection"""
+        return hashlib.md5(data).hexdigest()
     
-    def _needs_optimization(self, original_path):
+    def _needs_optimization(self, original_path, file_hash):
         """Check if image needs optimization (new or modified)"""
-        if not original_path.exists():
-            return False
-        
-        file_hash = self._get_file_hash(original_path)
-        if not file_hash:
-            return False
-        
         cache_key = str(original_path)
         if cache_key not in self.cache:
             return True
@@ -108,15 +103,13 @@ class ImageOptimizer:
         filename = original_path.name
         return self.thumbnail_dir / f"{filename}.webp"
     
-    def _optimize_single_image(self, image_path):
-        """Optimize a single image if needed"""
+    def _optimize_single_image(self, image_path, data):
+        """Optimize a single image if needed; ``data`` is its content, read once from a checked descriptor"""
         image_path = Path(image_path)
-        
-        if not image_path.exists():
-            return None
+        file_hash = self._get_file_hash(data)
         
         # Check if optimization is needed
-        if not self._needs_optimization(image_path):
+        if not self._needs_optimization(image_path, file_hash):
             optimized_path = self._get_optimized_path(image_path)
             if optimized_path.exists():
                 logger.info(f"Image already optimized: {image_path.name}")
@@ -128,7 +121,7 @@ class ImageOptimizer:
         
         try:
             # Open and optimize image
-            with Image.open(image_path) as img:
+            with Image.open(io.BytesIO(data)) as img:
                 # Convert to RGB if necessary (for WebP)
                 if img.mode not in ('RGB', 'RGBA'):
                     img = img.convert('RGB')
@@ -146,10 +139,9 @@ class ImageOptimizer:
                 
                 # Save optimized version
                 optimized_path = self._get_optimized_path(image_path)
-                img.save(optimized_path, format=self.config["format"], quality=self.config["quality"])
+                self._save_atomically(img, optimized_path, format=self.config["format"], quality=self.config["quality"])
                 
                 # Update cache
-                file_hash = self._get_file_hash(image_path)
                 self.cache[str(image_path)] = {
                     'hash': file_hash,
                     'optimized_path': str(optimized_path),
@@ -164,6 +156,19 @@ class ImageOptimizer:
         except Exception as e:
             logger.error(f"Failed to optimize image {image_path}: {e}")
             return None
+    
+    def _save_atomically(self, img, path, **save_args):
+        """Save to a hidden temporary file beside ``path``, then rename it in, so readers never get a partial image"""
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "wb") as f:
+                img.save(f, **save_args)
+            os.chmod(tmp, 0o644)  # the dashboard reads previews as another user
+            os.replace(tmp, path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+            raise
     
     def _generate_thumbnail(self, optimized_path, original_path):
         """Generate thumbnail from optimized image"""
@@ -184,7 +189,7 @@ class ImageOptimizer:
                 img.thumbnail(self.config["thumbnail_size"], RESAMPLE_LANCZOS)
                 
                 # Save thumbnail
-                img.save(thumbnail_path, format=self.config["format"], quality=70)
+                self._save_atomically(img, thumbnail_path, format=self.config["format"], quality=70)
                 
                 logger.info(f"Generated thumbnail: {thumbnail_path.name}")
                 return str(thumbnail_path)
@@ -249,8 +254,10 @@ class ImageOptimizer:
         except Exception as e:
             logger.error(f"Failed to cleanup orphaned files: {e}")
     
-    def optimize_all_images(self, source_dir="images"):
-        """Optimize all images in source directory with thumbnails and cleanup"""
+    def optimize_all_images(self, source_dir=None):
+        """Optimize all images in source directory (default: the configured images folder) with thumbnails and cleanup"""
+        if source_dir is None:
+            source_dir = image_schedule.resolve_images_dir(None)
         source_path = Path(source_dir)
         if not source_path.exists():
             logger.warning(f"Source directory not found: {source_dir}")
@@ -261,29 +268,29 @@ class ImageOptimizer:
         
         logger.info(f"Starting image optimization for {source_dir}/")
         
-        # Get all source files for cleanup
+        # Each image is read once through a descriptor checked to be inside the folder; anything else
+        # (such as a symlink leading out) is skipped, so cleanup also removes derivatives made from it.
         source_files = []
-        for ext in supported_extensions:
-            pattern = os.path.join(source_path, f"*{ext}")
-            source_files.extend(glob.glob(pattern))
-            # Also check uppercase extensions
-            pattern_upper = os.path.join(source_path, f"*{ext.upper()}")
-            source_files.extend(glob.glob(pattern_upper))
-        
-        # Process all image files
-        for image_file in source_path.iterdir():
-            if image_file.is_file() and image_file.suffix.lower() in supported_extensions:
-                try:
-                    # Optimize the image
-                    optimized_path = self._optimize_single_image(image_file)
-                    if optimized_path:
-                        # Generate thumbnail from optimized image
-                        self._generate_thumbnail(optimized_path, image_file)
-                        optimized_paths.append(optimized_path)
-                        
-                except Exception as e:
-                    logger.error(f"Failed to process image {image_file}: {e}")
-                    continue
+        for image_file in sorted(source_path.iterdir()):
+            if image_file.suffix.lower() not in supported_extensions:
+                continue
+            f = image_schedule.open_inside(source_path, image_file.name)
+            if f is None:
+                logger.warning(f"Skipping image that is not a file inside the images folder: {image_file.name}")
+                continue
+            try:
+                with f:
+                    data = f.read()
+                optimized_path = self._optimize_single_image(image_file, data)
+                source_files.append(image_file)
+                if optimized_path:
+                    # Generate thumbnail from optimized image
+                    self._generate_thumbnail(optimized_path, image_file)
+                    optimized_paths.append(optimized_path)
+                    
+            except Exception as e:
+                logger.error(f"Failed to process image {image_file}: {e}")
+                continue
         
         # Clean up orphaned files
         self._cleanup_orphaned_files(source_files)
@@ -317,12 +324,14 @@ class ImageOptimizer:
             return self.get_optimized_url(original_path)
 
 
-def main():
-    """Test the image optimizer"""
+def main(argv=None):
+    """Optimize the images folder (default: the one in config.json)"""
+    parser = argparse.ArgumentParser(description="Generate optimized copies and thumbnails of the calendar images")
+    parser.add_argument("--images-dir", help="folder of original images (default: from config.json)")
+    args = parser.parse_args(argv)
     optimizer = ImageOptimizer()
     
-    # Optimize all images in the images directory
-    optimized_count = len(optimizer.optimize_all_images())
+    optimized_count = len(optimizer.optimize_all_images(args.images_dir))
 
     logger.info(
         f"image_optimization_summary optimized_images={optimized_count} "

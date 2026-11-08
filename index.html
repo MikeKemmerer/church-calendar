@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>St. Demetrios Greek Orthodox Church - Calendar</title>
+    <title>Church Calendar</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23192231'/%3E%3Cpath d='M16 4v24M8 12h16' stroke='%23D4A843' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
     <!-- Self-hosted fonts — no external network dependency -->
     <style>
@@ -623,14 +623,32 @@
         .nav-calendar {
             height: 4.5rem;
             display: flex;
-            justify-content: center;
+            justify-content: flex-start;
             align-items: center;
             gap: 0.5rem;
             flex-shrink: 0;
+            position: relative;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
             border-top: 1px solid var(--border-color);
         }
 
+        .nav-calendar::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Auto margins centre a short row and collapse to scrolling when every day and image no longer fits */
+        .nav-calendar > :first-child {
+            margin-left: auto;
+        }
+
+        .nav-calendar > :last-child {
+            margin-right: auto;
+        }
+
         .nav-day {
+            flex-shrink: 0;
             width: 3.45rem;
             height: 3.6rem;
             background: var(--secondary-light);
@@ -756,6 +774,8 @@
             border-radius: 8px;
             padding: 1rem;
             width: 280px;
+            max-height: calc(100vh - 5rem);
+            overflow-y: auto;
             box-shadow: 0 8px 25px var(--shadow-color);
             backdrop-filter: blur(10px);
             z-index: 100;
@@ -878,6 +898,67 @@
             background: var(--primary-dark);
             transform: translateY(-1px);
         }
+
+        .image-schedule-btn {
+            text-align: left;
+        }
+
+        .image-schedule {
+            margin-top: 0.5rem;
+            max-height: 16rem;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            color: var(--dropdown-text);
+        }
+
+        .image-schedule h4 {
+            margin: 0.6rem 0 0.2rem;
+            font-size: 0.8rem;
+            color: var(--primary-color);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .image-schedule-row {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.3rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .image-schedule-thumb {
+            flex-shrink: 0;
+            width: 4rem;
+            height: 3rem;
+            object-fit: cover;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .image-schedule-text {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .options-version {
+            margin-top: 0.8rem;
+            font-size: 0.75rem;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .image-schedule-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .image-schedule-when {
+            flex-shrink: 0;
+            color: var(--text-muted);
+        }
     </style>
 </head>
 <body>
@@ -887,8 +968,8 @@
 
     <div class="page">
         <header class="header">
-            <h1>Saint Demetrios Greek Orthodox Church</h1>
-            <p class="header-subtitle">Upcoming Events &bull; Next 10 Days</p>
+            <h1 id="siteTitle"></h1>
+            <p class="header-subtitle" id="siteSubtitle"></p>
             
             <!-- Options Menu Button -->
             <button id="optionsBtn" class="options-btn" aria-label="Display Options" title="Display Options">
@@ -903,7 +984,7 @@
                 </div>
                 
                 <div class="options-section">
-                    <label>Theme</label>
+                    <label for="themeSelect">Theme</label>
                     <select id="themeSelect" class="options-select">
                         <option value="classic-gold">Classic Gold (Current)</option>
                         <option value="modern-blue">Modern Blue</option>
@@ -915,7 +996,7 @@
                 </div>
                 
                 <div class="options-section">
-                    <label>Font Style</label>
+                    <label for="fontSelect">Font Style</label>
                     <select id="fontSelect" class="options-select">
                         <option value="cinzel-lora">Cinzel + Lora (Current)</option>
                         <option value="roboto-open-sans">Roboto + Open Sans</option>
@@ -924,11 +1005,16 @@
                 </div>
                 
                 <div class="options-section">
-                    <label>Slide Speed</label>
+                    <label for="speedSelect">Slide Speed</label>
                     <select id="speedSelect" class="options-select">
                         <option value="12">Normal (12s)</option>
                         <option value="18">Slow (18s)</option>
                     </select>
+                </div>
+
+                <div class="options-section" id="daysSection" style="display: none;">
+                    <label for="daysSelect">Days Shown</label>
+                    <select id="daysSelect" class="options-select"></select>
                 </div>
 
                 <div class="options-section">
@@ -938,9 +1024,17 @@
                     </label>
                 </div>
                 
+                <div class="options-section">
+                    <label>Images</label>
+                    <button type="button" id="imageScheduleBtn" class="options-select image-schedule-btn">View image schedule</button>
+                    <div id="imageSchedule" class="image-schedule" style="display: none;"></div>
+                </div>
+
                 <div class="options-actions">
                     <button id="resetBtn" class="reset-btn">Reset to Defaults</button>
                 </div>
+
+                <div class="options-version" id="appVersion"></div>
             </div>
         </header>
 
@@ -968,6 +1062,12 @@
         let currentSlideIndex = 0;
         let slideTimer = null;
         let refreshTimer = null;
+
+        // Days shown: server sets the default and the maximum; the viewer's choice lives in localStorage
+        let defaultDays = 10;
+        let maxDays = 10;
+        let shownDays = 10;
+        let subtitleTemplate = '';
 
         const dayNames     = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
         const dayNamesFull = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -1032,7 +1132,7 @@
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
-            for (let i = 0; i < 10; i++) {
+            for (let i = 0; i < shownDays; i++) {
                 const d = new Date(today);
                 d.setDate(d.getDate() + i);
                 dayMap.set(d.toDateString(), { date: d, events: [] });
@@ -1115,8 +1215,12 @@
         }
 
         function updateNavCalendar() {
+            const container = document.getElementById('navCalendar');
             document.querySelectorAll('.nav-day').forEach((el, i) => {
                 el.classList.toggle('active', i === currentSlideIndex);
+                if (i === currentSlideIndex && container) {
+                    container.scrollLeft = el.offsetLeft - (container.clientWidth - el.offsetWidth) / 2;
+                }
             });
         }
 
@@ -1350,8 +1454,154 @@
             }
         }
 
+        // Allow remote control (e.g. church-monitoring) to push display settings
+        // via URL query params: ?theme=&font=&speed=&margins=&days=
+        // Recognized values are persisted to localStorage so they stick on
+        // future loads even without the query string (e.g. after a plain
+        // Midori relaunch that uses the bare kiosk URL). The server's maximum
+        // for days is only known after /api/branding loads, so it is enforced there.
+        function applyUrlParamOverrides() {
+            const params = new URLSearchParams(window.location.search);
+            const ALLOWED_THEMES = ['classic-gold', 'modern-blue', 'elegant-black', 'liturgical-purple', 'festive-red', 'light'];
+            const ALLOWED_FONTS = ['cinzel-lora', 'roboto-open-sans', 'playfair-source'];
+            const ALLOWED_SPEEDS = ['12', '18'];
+            let applied = false;
+
+            const theme = params.get('theme');
+            if (theme !== null && ALLOWED_THEMES.includes(theme)) {
+                localStorage.setItem('calendar_theme', theme);
+                applied = true;
+            }
+
+            const font = params.get('font');
+            if (font !== null && ALLOWED_FONTS.includes(font)) {
+                localStorage.setItem('calendar_font', font);
+                applied = true;
+            }
+
+            const speed = params.get('speed');
+            if (speed !== null && ALLOWED_SPEEDS.includes(speed)) {
+                localStorage.setItem('calendar_speed', speed);
+                applied = true;
+            }
+
+            const margins = params.get('margins');
+            if (margins === '1' || margins === '0') {
+                if (margins === '1') {
+                    localStorage.setItem('calendar_large_margins', 'true');
+                } else {
+                    localStorage.removeItem('calendar_large_margins');
+                }
+                applied = true;
+            }
+
+            const daysParam = params.get('days');
+            if (daysParam !== null && /^[1-9][0-9]{0,2}$/.test(daysParam)) {
+                localStorage.setItem('calendar_days', daysParam);
+                applied = true;
+            }
+
+            // Keep the address bar clean and avoid re-processing the same
+            // params on manual refreshes.
+            if (applied && window.history && window.history.replaceState) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        }
+
+        // Read-only view of upcoming, ending and expired images
+        function initImageSchedule() {
+            const btn = document.getElementById('imageScheduleBtn');
+            const box = document.getElementById('imageSchedule');
+            btn.addEventListener('click', () => {
+                if (box.style.display === 'block') {
+                    box.style.display = 'none';
+                    btn.textContent = 'View image schedule';
+                    return;
+                }
+                box.style.display = 'block';
+                btn.textContent = 'Hide image schedule';
+                loadImageSchedule(box);
+            });
+        }
+
+        async function loadImageSchedule(box) {
+            box.textContent = 'Loading...';
+            try {
+                const res = await fetch('/api/image-schedule', { cache: 'no-store' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                renderImageSchedule(box, data);
+            } catch (err) {
+                box.textContent = 'Could not load the image schedule.';
+            }
+        }
+
+        function renderImageSchedule(box, data) {
+            const images = data.images || [];
+            const thisYear = String(data.today || '').slice(0, 4);
+            const fmt = (iso) => {
+                const [y, m, d] = iso.split('-').map(Number);
+                const opts = { month: 'short', day: 'numeric' };
+                if (String(y) !== thisYear) opts.year = 'numeric';
+                return new Date(y, m - 1, d).toLocaleDateString(undefined, opts);
+            };
+            const title = (name) => name
+                .replace(/\.[^.]+$/, '')
+                .replace(/^\d{4}-\d{2}-\d{2}\s+/, '')
+                .replace(/\s*\[auto-archive\]$/i, '');
+            const byDate = (key) => (a, b) => (a[key] || '').localeCompare(b[key] || '');
+
+            const groups = [
+                ['Upcoming', images.filter(i => i.state === 'scheduled').sort(byDate('show_from')),
+                    i => 'starts ' + fmt(i.show_from) + (i.remove_after ? ', ends ' + fmt(i.remove_after) : '') + (i.auto_archive ? ' \u00b7 auto-archive' : '')],
+                ['Ending', images.filter(i => i.state === 'active' && i.remove_after).sort(byDate('remove_after')),
+                    i => 'ends ' + fmt(i.remove_after) + (i.auto_archive ? ' \u00b7 auto-archive' : '')],
+                ['Past end date', images.filter(i => i.state === 'expired').sort(byDate('remove_after')),
+                    i => 'ended ' + fmt(i.remove_after) + (i.auto_archive ? ' \u00b7 archives overnight' : '')]
+            ];
+            const alwaysShown = images.filter(i => i.state === 'persistent' || (i.state === 'active' && !i.remove_after)).length;
+
+            box.textContent = '';
+            groups.forEach(([heading, items, describe]) => {
+                if (!items.length) return;
+                const h = document.createElement('h4');
+                h.textContent = heading;
+                box.appendChild(h);
+                items.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = 'image-schedule-row';
+                    const thumb = document.createElement('img');
+                    thumb.className = 'image-schedule-thumb';
+                    thumb.alt = '';
+                    thumb.loading = 'lazy';
+                    thumb.src = item.image;
+                    thumb.onerror = () => { thumb.style.visibility = 'hidden'; };
+                    const text = document.createElement('div');
+                    text.className = 'image-schedule-text';
+                    const name = document.createElement('span');
+                    name.className = 'image-schedule-name';
+                    name.textContent = title(item.filename);
+                    name.title = item.filename;
+                    const when = document.createElement('span');
+                    when.className = 'image-schedule-when';
+                    when.textContent = describe(item);
+                    text.append(name, when);
+                    row.append(thumb, text);
+                    box.appendChild(row);
+                });
+            });
+            const summary = document.createElement('div');
+            summary.className = 'image-schedule-when';
+            summary.style.marginTop = '0.6rem';
+            summary.textContent = alwaysShown + ' image' + (alwaysShown === 1 ? '' : 's') + ' always shown';
+            box.appendChild(summary);
+        }
+
         // Options Menu Functionality
         function initOptionsMenu() {
+            applyUrlParamOverrides();
+            initImageSchedule();
+
             const optionsBtn = document.getElementById('optionsBtn');
             const optionsMenu = document.getElementById('optionsMenu');
             const closeBtn = document.getElementById('closeOptionsBtn');
@@ -1360,6 +1610,7 @@
             const speedSelect = document.getElementById('speedSelect');
             const largeMarginsCheckbox = document.getElementById('largeMarginsCheckbox');
             const resetBtn = document.getElementById('resetBtn');
+            const daysSelect = document.getElementById('daysSelect');
 
             optionsBtn.addEventListener('click', () => {
                 optionsMenu.style.display = optionsMenu.style.display === 'none' ? 'block' : 'none';
@@ -1406,6 +1657,12 @@
                 }
             });
 
+            daysSelect.addEventListener('change', (e) => {
+                const n = parseInt(e.target.value, 10);
+                setShownDays(n);
+                localStorage.setItem('calendar_days', String(n));
+            });
+
             resetBtn.addEventListener('click', () => {
                 document.body.className = '';
                 themeSelect.value = 'classic-gold';
@@ -1414,6 +1671,9 @@
                 SLIDE_DURATION = 12 * 1000;
                 speedSelect.value = '12';
                 resetSlideTimer();
+
+                setShownDays(defaultDays);
+                localStorage.removeItem('calendar_days');
 
                 document.body.classList.remove('large-margins');
                 largeMarginsCheckbox.checked = false;
@@ -1453,11 +1713,73 @@
             }
         }
 
+        function updateSubtitle() {
+            if (subtitleTemplate) {
+                document.getElementById('siteSubtitle').textContent = subtitleTemplate.replace('{days}', shownDays);
+            }
+        }
+
+        function setShownDays(n) {
+            shownDays = n;
+            document.getElementById('daysSelect').value = String(n);
+            updateSubtitle();
+            if (days.length) {
+                days = groupEventsByDay(events);
+                updateMixedContent();
+            }
+        }
+
+        // Branding and version come from the server so nothing church-specific lives in this file
+        async function loadBranding() {
+            try {
+                const res = await fetch('/api/branding', { cache: 'no-store' });
+                if (!res.ok) return;
+                const b = await res.json();
+                document.title = b.page_title;
+                document.getElementById('siteTitle').textContent = b.title;
+                document.getElementById('siteSubtitle').textContent = b.subtitle;
+
+                subtitleTemplate = b.subtitle_template || '';
+                defaultDays = b.default_days || defaultDays;
+                maxDays = Math.max(b.max_days || defaultDays, 1);
+                const daysSelect = document.getElementById('daysSelect');
+                daysSelect.innerHTML = '';
+                for (let n = 1; n <= maxDays; n++) {
+                    const opt = document.createElement('option');
+                    opt.value = String(n);
+                    opt.textContent = n + (n === 1 ? ' day' : ' days') + (n === defaultDays ? ' (default)' : '');
+                    daysSelect.appendChild(opt);
+                }
+                document.getElementById('daysSection').style.display = maxDays > 1 ? 'block' : 'none';
+                const saved = parseInt(localStorage.getItem('calendar_days'), 10);
+                shownDays = saved >= 1 ? Math.min(saved, maxDays) : defaultDays;
+                daysSelect.value = String(shownDays);
+                updateSubtitle();
+            } catch (err) {
+                console.warn('Branding unavailable', err);
+            }
+        }
+
+        async function loadAppVersion() {
+            try {
+                const res = await fetch('/api/version', { cache: 'no-store' });
+                if (!res.ok) return;
+                const v = await res.json();
+                const label = v.tag || (v.version ? 'v' + v.version : '');
+                if (label) document.getElementById('appVersion').textContent = 'Version ' + label;
+            } catch (err) {
+                console.warn('Version unavailable', err);
+            }
+        }
+
         // ── Init ──────────────────────────────────────────────────────────
         document.addEventListener('DOMContentLoaded', () => {
-            loadEvents();
+            loadBranding().finally(() => {
+                loadEvents();
+                refreshTimer = setInterval(loadEvents, REFRESH_INTERVAL);
+            });
+            loadAppVersion();
             loadImages();
-            refreshTimer = setInterval(loadEvents, REFRESH_INTERVAL);
             // Also refresh images periodically
             setInterval(loadImages, REFRESH_INTERVAL);
             
