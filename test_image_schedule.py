@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 import tempfile
@@ -289,13 +290,42 @@ class ImageScheduleTests(unittest.TestCase):
         shown = sorted(Path(i["file_path"]).name for i in manager._fetch_local_images())
         self.assertEqual(shown, ["Poster.Png", "photo.JPG", "plain.png"])
 
+    def test_dangling_symlink_counts_as_taken(self):
+        (self.dir / "Sale.png").symlink_to(self.dir / "gone.png")
+        self.assertEqual(sched.unique_destination(self.dir, "Sale.png"), self.dir / "Sale_1.png")
+        (self.dir / "Sale_1.png").symlink_to(self.dir / "gone.png")
+        self.assertEqual(sched.unique_destination(self.dir, "Sale.png"), self.dir / "Sale_2.png")
+
+    @unittest.skipUnless(importlib.util.find_spec("PIL"), "Pillow not installed")
+    def test_optimizer_skips_images_that_leave_the_folder(self):
+        from PIL import Image
+        import image_optimizer
+
+        images = self.dir / "images"
+        outside = self.dir / "outside"
+        images.mkdir()
+        outside.mkdir()
+        Image.new("RGB", (4, 4)).save(images / "ok.png")
+        Image.new("RGB", (4, 4)).save(outside / "private.png")
+        (images / "leak.png").symlink_to(outside / "private.png")
+        work = {"optimized_dir": str(self.dir / "optimized"), "thumbnail_dir": str(self.dir / "thumbs"),
+                "cache_file": str(self.dir / "cache.json")}
+        with mock.patch.dict(image_optimizer.OPTIMIZATION_CONFIG, work):
+            optimizer = image_optimizer.ImageOptimizer()
+            (self.dir / "optimized" / "leak.png.webp").write_bytes(b"old")
+            (self.dir / "thumbs" / "leak.png.webp").write_bytes(b"old")
+            optimizer.optimize_all_images(images)
+        self.assertEqual(sorted(p.name for p in (self.dir / "optimized").iterdir()), ["ok.png.webp"])
+        self.assertEqual(sorted(p.name for p in (self.dir / "thumbs").iterdir()), ["ok.png.webp"])
+
     def test_image_urls_quote_file_names(self):
         import image_sources
 
         self.touch("2026-12-01 Sale #1 100%.png")
         manager = image_sources.ImageSourceManager()
         manager.config = {"local_files": {"enabled": True, "folder_path": str(self.dir)}}
-        [image] = manager._fetch_local_images()
+        with mock.patch.object(sched, "today_local", return_value=TODAY):
+            [image] = manager._fetch_local_images()
         self.assertEqual(image["url"], "/source-images/2026-12-01%20Sale%20%231%20100%25.png")
         self.assertEqual(image["thumbnail"], image["url"])
 

@@ -5,15 +5,14 @@ Optimizes images at service start time for Raspberry Pi Zero 2W performance
 Includes thumbnail generation and orphaned file cleanup
 """
 
-import os
 import json
 import time
+import argparse
 import logging
 from datetime import datetime
 from pathlib import Path
 from PIL import Image
 import hashlib
-import glob
 
 try:
     RESAMPLE_LANCZOS = Image.Resampling.LANCZOS
@@ -29,15 +28,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger('church-calendar.image-optimizer')
 
-# Optimization configuration
+APP_DIR = Path(__file__).resolve().parent
+
+# Derivatives always live in the app's own images/ folder (served by the app), even when originals are on a share.
 OPTIMIZATION_CONFIG = {
     "max_width": 800,
     "max_height": 600,
     "quality": 85,
     "format": "WEBP",
-    "optimized_dir": "images/optimized",
-    "thumbnail_dir": "images/thumbnails",
-    "cache_file": "image_cache.json",
+    "optimized_dir": str(APP_DIR / "images" / "optimized"),
+    "thumbnail_dir": str(APP_DIR / "images" / "thumbnails"),
+    "cache_file": str(APP_DIR / "image_cache.json"),
     "thumbnail_size": (50, 50)
 }
 
@@ -249,8 +250,11 @@ class ImageOptimizer:
         except Exception as e:
             logger.error(f"Failed to cleanup orphaned files: {e}")
     
-    def optimize_all_images(self, source_dir="images"):
-        """Optimize all images in source directory with thumbnails and cleanup"""
+    def optimize_all_images(self, source_dir=None):
+        """Optimize all images in source directory (default: the configured images folder) with thumbnails and cleanup"""
+        if source_dir is None:
+            import image_schedule
+            source_dir = image_schedule.resolve_images_dir(None)
         source_path = Path(source_dir)
         if not source_path.exists():
             logger.warning(f"Source directory not found: {source_dir}")
@@ -261,29 +265,31 @@ class ImageOptimizer:
         
         logger.info(f"Starting image optimization for {source_dir}/")
         
-        # Get all source files for cleanup
+        # A symlink leading outside the folder is skipped, so cleanup also removes any derivatives made from it.
+        base = source_path.resolve()
         source_files = []
-        for ext in supported_extensions:
-            pattern = os.path.join(source_path, f"*{ext}")
-            source_files.extend(glob.glob(pattern))
-            # Also check uppercase extensions
-            pattern_upper = os.path.join(source_path, f"*{ext.upper()}")
-            source_files.extend(glob.glob(pattern_upper))
+        for image_file in sorted(source_path.iterdir()):
+            if image_file.suffix.lower() not in supported_extensions or not image_file.is_file():
+                continue
+            real = image_file.resolve()
+            if real != base and base not in real.parents:
+                logger.warning(f"Skipping image outside the images folder: {image_file.name}")
+                continue
+            source_files.append(image_file)
         
         # Process all image files
-        for image_file in source_path.iterdir():
-            if image_file.is_file() and image_file.suffix.lower() in supported_extensions:
-                try:
-                    # Optimize the image
-                    optimized_path = self._optimize_single_image(image_file)
-                    if optimized_path:
-                        # Generate thumbnail from optimized image
-                        self._generate_thumbnail(optimized_path, image_file)
-                        optimized_paths.append(optimized_path)
-                        
-                except Exception as e:
-                    logger.error(f"Failed to process image {image_file}: {e}")
-                    continue
+        for image_file in source_files:
+            try:
+                # Optimize the image
+                optimized_path = self._optimize_single_image(image_file)
+                if optimized_path:
+                    # Generate thumbnail from optimized image
+                    self._generate_thumbnail(optimized_path, image_file)
+                    optimized_paths.append(optimized_path)
+                    
+            except Exception as e:
+                logger.error(f"Failed to process image {image_file}: {e}")
+                continue
         
         # Clean up orphaned files
         self._cleanup_orphaned_files(source_files)
@@ -317,12 +323,14 @@ class ImageOptimizer:
             return self.get_optimized_url(original_path)
 
 
-def main():
-    """Test the image optimizer"""
+def main(argv=None):
+    """Optimize the images folder (default: the one in config.json)"""
+    parser = argparse.ArgumentParser(description="Generate optimized copies and thumbnails of the calendar images")
+    parser.add_argument("--images-dir", help="folder of original images (default: from config.json)")
+    args = parser.parse_args(argv)
     optimizer = ImageOptimizer()
     
-    # Optimize all images in the images directory
-    optimized_count = len(optimizer.optimize_all_images())
+    optimized_count = len(optimizer.optimize_all_images(args.images_dir))
 
     logger.info(
         f"image_optimization_summary optimized_images={optimized_count} "

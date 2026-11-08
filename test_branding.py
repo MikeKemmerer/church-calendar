@@ -154,6 +154,39 @@ class BrandingAndVersionTests(unittest.TestCase):
         for bad in ("../../config.json", "..", "", ".hidden", "out.webp", "missing.webp"):
             self.assertIsNone(server.file_inside(folder, bad), bad)
 
+    def test_fonts_folder_serves_only_fonts(self):
+        (self.dir / "fonts").mkdir()
+        (self.dir / "fonts" / "a.woff2").write_text("x")
+        (self.dir / "fonts" / "download_fonts.py").write_text("x")
+        self.assertIsNotNone(server.public_static_file("/fonts/a.woff2"))
+        self.assertIsNone(server.public_static_file("/fonts/download_fonts.py"))
+
+    def test_served_file_is_the_one_that_was_checked(self):
+        import http.client
+        import threading
+
+        (self.dir / "images").mkdir()
+        (self.dir / "config.json").write_text("SECRET")
+        (self.dir / "images" / "link.png#safe.png").write_text("poster")
+        (self.dir / "images" / "link.png").symlink_to(self.dir / "config.json")
+        httpd = server.http.server.ThreadingHTTPServer(("127.0.0.1", 0), server.CalendarHandler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        self.addCleanup(httpd.server_close)
+        self.addCleanup(httpd.shutdown)
+
+        def get(path, method="GET"):
+            conn = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1], timeout=5)
+            conn.request(method, path)
+            response = conn.getresponse()
+            result = (response.status, response.read())
+            conn.close()
+            return result
+
+        self.assertEqual(get("/images/link.png#safe.png"), (200, b"poster"))
+        self.assertEqual(get("/images/link.png")[0], 404)
+        self.assertEqual(get("/images/link.png#safe.png", "HEAD"), (200, b""))
+        self.assertEqual(get("/config.json")[0], 404)
+
 
 if __name__ == "__main__":
     unittest.main()

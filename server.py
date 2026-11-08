@@ -13,6 +13,7 @@ import urllib.request
 import urllib.error
 import urllib.parse
 import os
+import shutil
 import sys
 import logging
 import threading
@@ -165,6 +166,12 @@ def get_version_info():
 
 
 IMAGE_FILE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+FONT_FILE_EXTENSIONS = {".woff2"}
+
+
+def is_within(path, folder):
+    """True if resolved ``path`` is ``folder`` or below it (Path.is_relative_to needs Python 3.9)."""
+    return path == folder or folder in path.parents
 
 
 def file_inside(folder, name):
@@ -176,12 +183,12 @@ def file_inside(folder, name):
         real = (Path(folder) / name).resolve(strict=True)
     except (OSError, RuntimeError):
         return None
-    return Path(folder) / name if real.is_relative_to(base) and real.is_file() else None
+    return Path(folder) / name if is_within(real, base) and real.is_file() else None
 
 
 # The only app files anyone may fetch; config.json, source, .git, caches and folder listings stay private.
 PUBLIC_FILES = {"/index.html", "/calendar_cache.json"}  # calendar_cache.json feeds LiveStreamScheduler
-PUBLIC_FOLDERS = {"/fonts/": ("fonts", None), "/images/": ("images", IMAGE_FILE_EXTENSIONS)}
+PUBLIC_FOLDERS = {"/fonts/": ("fonts", FONT_FILE_EXTENSIONS), "/images/": ("images", IMAGE_FILE_EXTENSIONS)}
 
 
 def public_static_file(url_path):
@@ -192,7 +199,7 @@ def public_static_file(url_path):
     for prefix, (folder, extensions) in PUBLIC_FOLDERS.items():
         if path.startswith(prefix):
             name = path[len(prefix):]
-            if extensions is not None and os.path.splitext(name)[1].lower() not in extensions:
+            if os.path.splitext(name)[1].lower() not in extensions:
                 return None
             return file_inside(os.path.join(APP_DIR, folder), name)
     return None
@@ -209,7 +216,7 @@ def resolve_source_image(name):
     path = folder / name
     try:
         real = path.resolve(strict=True)
-        inside = real.is_relative_to(folder.resolve(strict=True))
+        inside = is_within(real, folder.resolve(strict=True))
     except OSError:
         return None
     return path if inside and real.is_file() else None
@@ -489,14 +496,24 @@ class CalendarHandler(http.server.SimpleHTTPRequestHandler):
         self.serve_public_static("/index.html" if path in ("", "/") else path, head_only=True)
 
     def serve_public_static(self, path, head_only=False):
-        if public_static_file(path) is None:
+        # Send the exact file that was checked; letting the base class re-read the URL could open another.
+        target = public_static_file(path)
+        try:
+            f = open(target, "rb") if target is not None else None
+        except OSError:
+            f = None
+        if f is None:
             self.send_error(404, "File not found")
             return
-        self.path = path
-        if head_only:
-            super().do_HEAD()
-        else:
-            super().do_GET()
+        with f:
+            stat = os.fstat(f.fileno())
+            self.send_response(200)
+            self.send_header("Content-Type", self.guess_type(str(target)))
+            self.send_header("Content-Length", str(stat.st_size))
+            self.send_header("Last-Modified", self.date_time_string(stat.st_mtime))
+            self.end_headers()
+            if not head_only:
+                shutil.copyfileobj(f, self.wfile)
 
     def list_directory(self, path):
         self.send_error(404, "File not found")

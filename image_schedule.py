@@ -294,8 +294,9 @@ def drop_entry(images_dir: Path | str, name: str) -> None:
 
 def unique_destination(directory: Path, name: str) -> Path:
     """``directory/name``, or ``Name_1.ext``, ``Name_2.ext`` ... (before any ' [auto-archive]' marker) if taken."""
+    # lexists, so a dangling symlink still counts as taken and is never replaced.
     target = directory / name
-    if not target.exists():
+    if not os.path.lexists(target):
         return target
     stem, ext = os.path.splitext(name)
     marker = ""
@@ -303,7 +304,7 @@ def unique_destination(directory: Path, name: str) -> Path:
     if stem.lower().endswith(tail):
         marker, stem = stem[-len(tail):], stem[:-len(tail)]
     counter = 1
-    while (directory / f"{stem}_{counter}{marker}{ext}").exists():
+    while os.path.lexists(directory / f"{stem}_{counter}{marker}{ext}"):
         counter += 1
     return directory / f"{stem}_{counter}{marker}{ext}"
 
@@ -372,11 +373,11 @@ def config_timezone() -> str:
         return DEFAULT_TIMEZONE
 
 
-def run_optimizer() -> None:
+def run_optimizer(images_dir: Path) -> None:
     """Regenerate derivatives so files that left images/ lose their optimized copies."""
     script = Path(__file__).resolve().parent / "image_optimizer.py"
     if script.is_file():
-        subprocess.run([sys.executable, str(script)], cwd=script.parent, check=False)
+        subprocess.run([sys.executable, str(script), "--images-dir", str(images_dir)], cwd=script.parent, check=False)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -416,7 +417,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "sweep":
             archived = sweep(images_dir, today)
             if archived:
-                run_optimizer()
+                run_optimizer(images_dir)
             print(json.dumps({"archived": archived}))
     except ScheduleError as exc:
         print(json.dumps({"error": str(exc)}), file=sys.stderr)
