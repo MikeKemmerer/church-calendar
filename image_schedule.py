@@ -274,6 +274,22 @@ def drop_entry(images_dir: Path | str, name: str) -> None:
             _save(images_dir, data)
 
 
+def unique_destination(directory: Path, name: str) -> Path:
+    """``directory/name``, or ``Name_1.ext``, ``Name_2.ext`` ... (before any ' [auto-archive]' marker) if taken."""
+    target = directory / name
+    if not target.exists():
+        return target
+    stem, ext = os.path.splitext(name)
+    marker = ""
+    tail = " " + AUTO_ARCHIVE_MARKER
+    if stem.lower().endswith(tail):
+        marker, stem = stem[-len(tail):], stem[:-len(tail)]
+    counter = 1
+    while (directory / f"{stem}_{counter}{marker}{ext}").exists():
+        counter += 1
+    return directory / f"{stem}_{counter}{marker}{ext}"
+
+
 def sweep(images_dir: Path | str, today: date, extensions: tuple[str, ...] = DEFAULT_EXTENSIONS) -> list[str]:
     """Move auto-archive images whose last day has passed into images/archive/."""
     images_dir = Path(images_dir)
@@ -289,11 +305,7 @@ def sweep(images_dir: Path | str, today: date, extensions: tuple[str, ...] = DEF
                 continue
             archive = images_dir / ARCHIVE_DIR
             archive.mkdir(exist_ok=True)
-            target = archive / name
-            counter = 1
-            while target.exists():
-                target = archive / f"{source.stem}-{counter}{source.suffix}"
-                counter += 1
+            target = unique_destination(archive, name)
             shutil.move(str(source), str(target))
             del data["images"][name]
             archived.append(name)

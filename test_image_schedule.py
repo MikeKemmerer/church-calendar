@@ -214,6 +214,27 @@ class ImageScheduleTests(unittest.TestCase):
         ordinary = datetime(2026, 7, 1, 12, 0, tzinfo=tz)
         self.assertEqual(sched.seconds_until_hour(3, "America/Los_Angeles", now=ordinary), 15 * 3600)
 
+    def test_colliding_archive_names_are_numbered_before_the_marker(self):
+        self.touch("2026-12-01 Sale [auto-archive].png")
+        (self.dir / "archive").mkdir()
+        for taken in ("2026-12-01 Sale [auto-archive].png", "2026-12-01 Sale_1 [auto-archive].png"):
+            (self.dir / "archive" / taken).write_bytes(b"old")
+        sched.sweep(self.dir, date(2026, 12, 3))
+        self.assertTrue((self.dir / "archive" / "2026-12-01 Sale_2 [auto-archive].png").exists())
+        self.assertEqual((self.dir / "archive" / "2026-12-01 Sale [auto-archive].png").read_bytes(), b"old")
+
+    def test_unique_destination_names(self):
+        d = self.dir
+        self.assertEqual(sched.unique_destination(d, "Poster.png"), d / "Poster.png")
+        (d / "Poster.png").write_bytes(b"x")
+        self.assertEqual(sched.unique_destination(d, "Poster.png"), d / "Poster_1.png")
+        (d / "Poster_1.png").write_bytes(b"x")
+        self.assertEqual(sched.unique_destination(d, "Poster.png"), d / "Poster_2.png")
+        (d / "A [AUTO-ARCHIVE].JPG").write_bytes(b"x")
+        self.assertEqual(sched.unique_destination(d, "A [AUTO-ARCHIVE].JPG"), d / "A_1 [AUTO-ARCHIVE].JPG")
+        (d / "noext").write_bytes(b"x")
+        self.assertEqual(sched.unique_destination(d, "noext"), d / "noext_1")
+
     def test_cli_list_reports_states(self):
         self.touch("2026-11-30 Old.png")
         self.touch("Always.png")
