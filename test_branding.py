@@ -16,7 +16,8 @@ class BrandingAndVersionTests(unittest.TestCase):
             server,
             APP_DIR=str(self.dir),
             VERSION_RECORD=str(self.dir / "installed-version.json"),
-            DISPLAY_DAYS=10,
+            DEFAULT_DISPLAY_DAYS=10,
+            MAX_DISPLAY_DAYS=10,
         )
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -28,8 +29,28 @@ class BrandingAndVersionTests(unittest.TestCase):
     def test_defaults_without_config(self):
         self.assertEqual(
             server.get_branding(),
-            {"title": "Church Calendar", "subtitle": "Upcoming Events \u2022 Next 10 Days", "page_title": "Church Calendar - Calendar"},
+            {
+                "title": "Church Calendar",
+                "subtitle": "Upcoming Events \u2022 Next 10 Days",
+                "subtitle_template": "Upcoming Events \u2022 Next {days} Days",
+                "default_days": 10,
+                "max_days": 10,
+                "page_title": "Church Calendar - Calendar",
+            },
         )
+
+    def test_branding_reports_default_and_maximum_days(self):
+        with mock.patch.multiple(server, DEFAULT_DISPLAY_DAYS=7, MAX_DISPLAY_DAYS=21):
+            b = server.get_branding()
+        self.assertEqual((b["default_days"], b["max_days"]), (7, 21))
+        self.assertEqual(b["subtitle"], "Upcoming Events \u2022 Next 7 Days")
+
+    def test_day_limits(self):
+        self.assertEqual(server.resolve_day_limits(90, 10, 0), (10, 10))
+        self.assertEqual(server.resolve_day_limits(90, 10, 30), (10, 30))
+        self.assertEqual(server.resolve_day_limits(90, 10, 5), (5, 5))
+        self.assertEqual(server.resolve_day_limits(14, 10, 60), (10, 14))
+        self.assertEqual(server.resolve_day_limits(7, 10, 0), (7, 7))
 
     def test_configured_text_and_placeholders(self):
         self.write_config({"branding": {"title": "Parish Hall", "subtitle": "Coming up in {days} days"}})

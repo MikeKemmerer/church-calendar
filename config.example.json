@@ -32,7 +32,8 @@
     "cache_enabled": true,
     "cache_file": "calendar_cache.json",
     "cache_days": 90,
-    "display_days": 10,
+    "default_display_days": 10,
+    "max_display_days": 30,
     "max_events": 100
   },
   "display": {

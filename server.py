@@ -101,7 +101,20 @@ def _calendar_setting(key, default):
 
 # The cache serves downstream schedulers; the Pi display only ever shows a short window.
 CACHE_DAYS = _calendar_setting("cache_days", 90)
-DISPLAY_DAYS = _calendar_setting("display_days", 10)
+
+
+def resolve_day_limits(cache_days, default_days, configured_max):
+    """Return (default, maximum) days a display may show; the maximum is a hard limit and never exceeds the cache."""
+    maximum = min(configured_max or default_days, cache_days)
+    return min(default_days, maximum), maximum
+
+
+# display_days is the pre-rc.5 name of default_display_days.
+DEFAULT_DISPLAY_DAYS, MAX_DISPLAY_DAYS = resolve_day_limits(
+    CACHE_DAYS,
+    _calendar_setting("default_display_days", _calendar_setting("display_days", 10)),
+    _calendar_setting("max_display_days", 0),
+)
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 VERSION_RECORD = "/etc/church-calendar/installed-version.json"
@@ -122,9 +135,13 @@ def get_branding():
         return value.strip()[:120] if isinstance(value, str) and value.strip() else default
 
     title = text("title", "Church Calendar")
+    subtitle_template = text("subtitle", "Upcoming Events \u2022 Next {days} Days")
     return {
         "title": title,
-        "subtitle": text("subtitle", "Upcoming Events \u2022 Next {days} Days").replace("{days}", str(DISPLAY_DAYS)),
+        "subtitle": subtitle_template.replace("{days}", str(DEFAULT_DISPLAY_DAYS)),
+        "subtitle_template": subtitle_template,
+        "default_days": DEFAULT_DISPLAY_DAYS,
+        "max_days": MAX_DISPLAY_DAYS,
         "page_title": text("page_title", "{title} - Calendar").replace("{title}", title),
     }
 
@@ -332,7 +349,7 @@ class CalendarHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             
             logger.info("api_events_fetch_start")
-            events = limit_events_to_days(fetch_cached_calendar_events(), DISPLAY_DAYS)
+            events = limit_events_to_days(fetch_cached_calendar_events(), MAX_DISPLAY_DAYS)
             logger.info(f"api_events_fetch_complete events={len(events)}")
             
             self.wfile.write(json.dumps(events).encode("utf-8"))

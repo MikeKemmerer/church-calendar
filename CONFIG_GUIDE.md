@@ -17,7 +17,7 @@
 ### Branding Settings
 - `branding.title`: Heading shown at the top of the display (default: `Church Calendar`)
 - `branding.subtitle`: Line under the heading (default: `Upcoming Events • Next {days} Days`;
-  `{days}` becomes `calendar.display_days`)
+  `{days}` becomes `calendar.default_display_days`)
 - `branding.page_title`: Browser tab title (default: `{title} - Calendar`)
 
 Changes apply on the next page load; no restart is needed. The ⚙️ options menu also shows the
@@ -46,8 +46,15 @@ installed version (from `/etc/church-calendar/installed-version.json`, or `VERSI
 - `cache_days`: How many days ahead to cache (default: 90). `calendar_cache.json`
   is consumed by LiveStreamScheduler, which cannot schedule further ahead than
   this window reaches.
-- `display_days`: How many days ahead this Pi's display shows (default: 10).
-  Kept separate from `cache_days` so a wider cache does not slow the display.
+- `default_display_days`: How many days ahead a display shows until its viewer picks a
+  different number in the ⚙️ options menu (default: 10). Formerly `display_days`, which is
+  still read if `default_display_days` is absent.
+- `max_display_days`: The most days any display may choose (default: the default, so the
+  menu offers no choice until you raise it). Never exceeds `cache_days`; a default above
+  the maximum is lowered to it. The page's choice is stored in that browser only. It can
+  also be set with `?days=N` on the page URL, like `?theme=`, `?font=`, `?speed=` and
+  `?margins=`: the value is saved in the browser, the address bar is cleaned, and a value
+  above the maximum is lowered to it.
 - `max_events`: Maximum number of events to cache (default: 100)
 
 ### Local Files Settings
