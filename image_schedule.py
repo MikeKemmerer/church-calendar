@@ -108,19 +108,21 @@ def today_local(timezone_name: str = DEFAULT_TIMEZONE) -> date:
     return datetime.now().astimezone().date()
 
 
-def seconds_until_hour(hour: int, timezone_name: str = DEFAULT_TIMEZONE) -> float:
-    """Seconds from now until the next local time of day at ``hour``:00."""
+def seconds_until_hour(hour: int, timezone_name: str = DEFAULT_TIMEZONE, now: datetime | None = None) -> float:
+    """Real seconds from now until the next local time of day at ``hour``:00 (DST-safe)."""
     tz = None
     if ZoneInfo is not None:
         try:
             tz = ZoneInfo(timezone_name)
         except Exception:
             tz = None
-    now = datetime.now(tz) if tz else datetime.now().astimezone()
+    if now is None:
+        now = datetime.now(tz) if tz else datetime.now().astimezone()
     target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
     if target <= now:
         target += timedelta(days=1)
-    return (target - now).total_seconds()
+    # Subtracting aware datetimes that share a ZoneInfo measures wall-clock time, so compare timestamps.
+    return target.timestamp() - now.timestamp()
 
 
 @contextlib.contextmanager
@@ -137,11 +139,24 @@ def _lock(images_dir: Path) -> Iterator[None]:
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
+def _validate_schedule(data: Any) -> None:
+    """Raise ValueError unless ``data`` is a schedule whose entries are objects keyed by bare file names."""
+    if not isinstance(data, dict):
+        raise ValueError("schedule must be an object")
+    images = data.get("images", {})
+    if not isinstance(images, dict):
+        raise ValueError("images must be an object")
+    for name, entry in images.items():
+        if not name or name in (".", "..") or Path(name).name != name or not isinstance(entry, dict):
+            raise ValueError(f"invalid schedule entry {name!r}")
+
+
 def _load(images_dir: Path, repair: bool = False) -> dict[str, Any]:
     """Read the schedule; a missing or malformed file reads as empty, any other read error propagates."""
     path = images_dir / SCHEDULE_NAME
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
+        _validate_schedule(data)
     except FileNotFoundError:
         data = {}
     except ValueError:
@@ -150,8 +165,7 @@ def _load(images_dir: Path, repair: bool = False) -> dict[str, Any]:
             with contextlib.suppress(OSError):
                 os.replace(path, images_dir / f"{SCHEDULE_NAME}.corrupt-{datetime.now():%Y%m%d-%H%M%S}")
         data = {}
-    images = data.get("images") if isinstance(data, dict) else None
-    return {"version": 1, "images": images if isinstance(images, dict) else {}}
+    return {"version": 1, "images": data.get("images", {})}
 
 
 def _save(images_dir: Path, data: dict[str, Any]) -> None:

@@ -161,12 +161,26 @@ def get_version_info():
         return {"version": None, "tag": None}
 
 
+IMAGE_FILE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+
+
+def resolve_source_image(name):
+    """The original image ``name`` in the configured folder, or None; only bare image file names qualify."""
+    if not name or os.path.basename(name) != name or os.path.splitext(name)[1].lower() not in IMAGE_FILE_EXTENSIONS:
+        return None
+    path = image_schedule.resolve_images_dir(None) / name
+    return path if path.is_file() else None
+
+
 def image_preview_url(name):
     """Best available web path for an image: optimized copy, then thumbnail, then the original."""
     quoted = urllib.parse.quote(name)
     for folder, prefix in (("optimized", "/optimized/"), ("thumbnails", "/thumbnails/")):
         if os.path.exists(os.path.join(APP_DIR, "images", folder, name + ".webp")):
             return f"{prefix}{quoted}.webp"
+    configured = os.path.realpath(image_schedule.resolve_images_dir(None))
+    if configured != os.path.realpath(os.path.join(APP_DIR, "images")):
+        return f"/source-images/{quoted}"
     return f"/images/{quoted}"
 
 
@@ -564,6 +578,20 @@ def main():
                     else:
                         self.send_error(404, 'File not found')
                         return
+                elif self.path.startswith('/source-images/'):
+                    # Originals from the configured folder when it is not the app's own images/ folder
+                    requested_name = urllib.parse.unquote(os.path.basename(self.path.split('?', 1)[0]))
+                    source = resolve_source_image(requested_name)
+                    if source is None:
+                        self.send_error(404, 'File not found')
+                        return
+                    self.send_response(200)
+                    self.send_header('Content-type', self.guess_type(requested_name))
+                    self.send_header('Cache-Control', 'public, max-age=3600')
+                    self.end_headers()
+                    with open(source, 'rb') as f:
+                        self.wfile.write(f.read())
+                    return
                 super().do_GET()
 
         if IMAGE_SOURCES_AVAILABLE:

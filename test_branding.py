@@ -21,6 +21,10 @@ class BrandingAndVersionTests(unittest.TestCase):
         )
         patcher.start()
         self.addCleanup(patcher.stop)
+        self.configured = self.dir / "images"
+        folder_patch = mock.patch.object(server.image_schedule, "resolve_images_dir", side_effect=lambda explicit: self.configured)
+        folder_patch.start()
+        self.addCleanup(folder_patch.stop)
         self.addCleanup(self.tmp.cleanup)
 
     def write_config(self, data):
@@ -94,6 +98,24 @@ class BrandingAndVersionTests(unittest.TestCase):
         (self.dir / "images" / "optimized").mkdir()
         (self.dir / "images" / "optimized" / (name + ".webp")).write_bytes(b"x")
         self.assertEqual(server.image_preview_url(name), f"/optimized/{quoted}.webp")
+
+    def test_originals_in_an_external_folder_are_served_by_the_source_route(self):
+        self.configured = self.dir / "mnt-posters"
+        self.configured.mkdir()
+        self.assertEqual(server.image_preview_url("a b.png"), "/source-images/a%20b.png")
+        (self.dir / "images" / "optimized").mkdir(parents=True)
+        (self.dir / "images" / "optimized" / "a b.png.webp").write_bytes(b"x")
+        self.assertEqual(server.image_preview_url("a b.png"), "/optimized/a%20b.png.webp")
+
+    def test_source_route_only_serves_bare_image_names_from_the_configured_folder(self):
+        self.configured = self.dir / "mnt-posters"
+        self.configured.mkdir()
+        (self.configured / "ok.png").write_bytes(b"x")
+        (self.configured / "notes.txt").write_text("secret")
+        (self.dir / "config.json").write_text("{}")
+        self.assertEqual(server.resolve_source_image("ok.png"), self.configured / "ok.png")
+        for bad in ("../config.json", "sub/ok.png", "notes.txt", "missing.png", "", ".."):
+            self.assertIsNone(server.resolve_source_image(bad), bad)
 
 
 if __name__ == "__main__":

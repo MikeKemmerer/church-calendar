@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from unittest import mock
 
@@ -177,6 +177,42 @@ class ImageScheduleTests(unittest.TestCase):
         with mock.patch.object(sched, "_lock", side_effect=PermissionError("read-only share")):
             shown = sorted(Path(i["file_path"]).name for i in manager._fetch_local_images())
         self.assertEqual(shown, ["Always.png"])
+
+    def test_traversal_names_in_the_schedule_never_move_files_outside_the_folder(self):
+        images = self.dir / "images"
+        images.mkdir()
+        (self.dir / "config.json").write_text("{}")
+        (images / "A.png").write_bytes(b"x")
+        entry = {"remove_after": "2020-01-01", "auto_archive": True, "show_from": None, "origin": "ui"}
+        (images / sched.SCHEDULE_NAME).write_text(json.dumps({"images": {"../config.json": entry, "A.png": entry}}))
+        sched.sweep(images, date(2030, 1, 1))
+        self.assertTrue((self.dir / "config.json").exists())
+        self.assertFalse((images / "config.json").exists())
+        self.assertEqual(len(list(images.glob(sched.SCHEDULE_NAME + ".corrupt-*"))), 1)
+
+    def test_schema_invalid_schedule_is_kept_as_a_backup(self):
+        self.touch("A.png")
+        for bad in ('{"images": []}', '[]', '{"images": {"A.png": "2026-12-20"}}'):
+            (self.dir / sched.SCHEDULE_NAME).write_text(bad)
+            sched.sync(self.dir)
+            backups = sorted(self.dir.glob(sched.SCHEDULE_NAME + ".corrupt-*"))
+            self.assertTrue(backups, bad)
+            self.assertEqual(backups[-1].read_text(), bad)
+            for b in backups:
+                b.unlink()
+
+    def test_nightly_timer_counts_real_seconds_across_dst(self):
+        from zoneinfo import ZoneInfo
+
+        tz = ZoneInfo("America/Los_Angeles")
+        # Clocks fall back at 02:00 on 2026-11-01, so 00:30 to 03:00 is 3.5 real hours, not 2.5
+        fall_back = datetime(2026, 11, 1, 0, 30, tzinfo=tz)
+        self.assertEqual(sched.seconds_until_hour(3, "America/Los_Angeles", now=fall_back), 3.5 * 3600)
+        # Clocks spring forward at 02:00 on 2027-03-14, so 00:30 to 03:00 is 1.5 real hours
+        spring_forward = datetime(2027, 3, 14, 0, 30, tzinfo=tz)
+        self.assertEqual(sched.seconds_until_hour(3, "America/Los_Angeles", now=spring_forward), 1.5 * 3600)
+        ordinary = datetime(2026, 7, 1, 12, 0, tzinfo=tz)
+        self.assertEqual(sched.seconds_until_hour(3, "America/Los_Angeles", now=ordinary), 15 * 3600)
 
     def test_cli_list_reports_states(self):
         self.touch("2026-11-30 Old.png")

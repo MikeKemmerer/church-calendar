@@ -123,6 +123,10 @@ class ImageSourceManager:
         if not os.path.exists(folder_path):
             logger.warning(f"Local images folder not found: {folder_path}")
             return images
+
+        # Originals come from the app's /images/ route unless the configured folder lives elsewhere.
+        same_folder = os.path.realpath(folder_path) == os.path.realpath(os.path.join(base_dir, "images"))
+        originals_prefix = "/images/" if same_folder else "/source-images/"
         
         # Build glob pattern for file extensions
         pattern = "*"
@@ -166,7 +170,7 @@ class ImageSourceManager:
                         file_url = f"/optimized/{file_name}.webp"
                     else:
                         # Fall back to original image in images folder
-                        file_url = f"/images/{file_name}"
+                        file_url = f"{originals_prefix}{file_name}"
                     
                     # Check if thumbnail exists
                     thumbnail_path = os.path.join(base_dir, "images", "thumbnails", file_name + ".webp")
@@ -177,7 +181,7 @@ class ImageSourceManager:
                         if os.path.exists(optimized_path):
                             thumbnail_url = f"/optimized/{file_name}.webp"
                         else:
-                            thumbnail_url = f"/images/{file_name}"
+                            thumbnail_url = f"{originals_prefix}{file_name}"
                     
                     images.append({
                         'url': file_url,
