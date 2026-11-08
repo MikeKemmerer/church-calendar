@@ -300,6 +300,13 @@ VERSION_FILE="$NTFY_CONF_DIR/installed-version.json"
 REL_VERSION="$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION" 2>/dev/null || echo unknown)"
 REL_COMMIT="$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
 REL_TAG="$(git -C "$SCRIPT_DIR" describe --tags --exact-match 2>/dev/null || echo "v${REL_VERSION}")"
+# A release tarball has no .git; its RELEASE.json carries the exact tag, so an rc is not recorded as the final.
+if [[ "$REL_COMMIT" == unknown && -f "$SCRIPT_DIR/RELEASE.json" ]]; then
+    REL_TAG="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("tag") or "")' "$SCRIPT_DIR/RELEASE.json" 2>/dev/null || true)"
+    REL_COMMIT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("commit") or "")' "$SCRIPT_DIR/RELEASE.json" 2>/dev/null || true)"
+    [[ -n "$REL_TAG" ]] || REL_TAG="v${REL_VERSION}"
+    [[ -n "$REL_COMMIT" ]] || REL_COMMIT=unknown
+fi
 python3 - "$VERSION_FILE" "$REL_VERSION" "$REL_TAG" "$REL_COMMIT" <<'PY'
 import json, os, sys, datetime
 path, version, tag, commit = sys.argv[1:5]

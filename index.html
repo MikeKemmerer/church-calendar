@@ -1699,7 +1699,7 @@
             shownDays = n;
             document.getElementById('daysSelect').value = String(n);
             updateSubtitle();
-            if (events.length) {
+            if (days.length) {
                 days = groupEventsByDay(events);
                 updateMixedContent();
             }

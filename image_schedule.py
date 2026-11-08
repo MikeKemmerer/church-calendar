@@ -137,10 +137,18 @@ def _lock(images_dir: Path) -> Iterator[None]:
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def _load(images_dir: Path) -> dict[str, Any]:
+def _load(images_dir: Path, repair: bool = False) -> dict[str, Any]:
+    """Read the schedule; a missing or malformed file reads as empty, any other read error propagates."""
+    path = images_dir / SCHEDULE_NAME
     try:
-        data = json.loads((images_dir / SCHEDULE_NAME).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        data = {}
+    except ValueError:
+        if repair:
+            logger.error("image_schedule_malformed file=%s; keeping a copy and rebuilding from file names", path)
+            with contextlib.suppress(OSError):
+                os.replace(path, images_dir / f"{SCHEDULE_NAME}.corrupt-{datetime.now():%Y%m%d-%H%M%S}")
         data = {}
     images = data.get("images") if isinstance(data, dict) else None
     return {"version": 1, "images": images if isinstance(images, dict) else {}}
@@ -163,20 +171,22 @@ def _save(images_dir: Path, data: dict[str, Any]) -> None:
 def _image_files(images_dir: Path, extensions: tuple[str, ...]) -> list[str]:
     exts = {e.lower() for e in extensions}
     try:
-        return sorted(p.name for p in images_dir.iterdir() if p.is_file() and p.suffix.lower() in exts)
-    except OSError:
+        entries = list(images_dir.iterdir())
+    except FileNotFoundError:
         return []
+    return sorted(p.name for p in entries if p.is_file() and p.suffix.lower() in exts)
 
 
 def _sync_locked(images_dir: Path, extensions: tuple[str, ...]) -> dict[str, Any]:
-    data = _load(images_dir)
+    data = _load(images_dir, repair=True)
     images = data["images"]
     present = set(_image_files(images_dir, extensions))
     changed = False
     for name in present - images.keys():
         images[name] = entry_from_filename(name)
         changed = True
-    for name in [n for n in images if n not in present]:
+    # Prune only files that are really gone, not ones an extension filter happens to hide.
+    for name in [n for n in images if not (images_dir / n).is_file()]:
         del images[name]
         changed = True
     if changed:
@@ -194,6 +204,16 @@ def sync(images_dir: Path | str, extensions: tuple[str, ...] = DEFAULT_EXTENSION
 def active_names(images_dir: Path | str, today: date, extensions: tuple[str, ...] = DEFAULT_EXTENSIONS) -> set[str]:
     data = sync(images_dir, extensions)
     return {name for name, entry in data["images"].items() if is_active(entry, today)}
+
+
+def visible_names(images_dir: Path | str, today: date, extensions: tuple[str, ...] = DEFAULT_EXTENSIONS) -> set[str]:
+    """Names to show today; on a read-only folder (no lock or schedule writes) the stored schedule still applies."""
+    try:
+        return active_names(images_dir, today, extensions)
+    except OSError as exc:
+        logger.warning("image_schedule_read_only error=%s; using the stored schedule without writing", exc)
+        rows = listing(images_dir, today, extensions, read_only=True)
+        return {row["filename"] for row in rows if row["state"] in ("active", "persistent")}
 
 
 def set_entry(
@@ -235,7 +255,7 @@ def set_entry(
 def drop_entry(images_dir: Path | str, name: str) -> None:
     images_dir = Path(images_dir)
     with _lock(images_dir):
-        data = _load(images_dir)
+        data = _load(images_dir, repair=True)
         if data["images"].pop(name, None) is not None:
             _save(images_dir, data)
 

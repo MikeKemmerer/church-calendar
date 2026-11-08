@@ -131,7 +131,7 @@ class ImageSourceManager:
         active_names = None
         try:
             timezone_name = self.config.get("calendar", {}).get("timezone") or image_schedule.DEFAULT_TIMEZONE
-            active_names = image_schedule.active_names(
+            active_names = image_schedule.visible_names(
                 folder_path, image_schedule.today_local(timezone_name), tuple(file_extensions)
             )
         except Exception as e:

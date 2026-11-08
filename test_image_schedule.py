@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest import mock
 
 import image_schedule as sched
 
@@ -124,6 +125,58 @@ class ImageScheduleTests(unittest.TestCase):
         self.assertEqual([r["state"] for r in rows], ["expired"])
         self.assertFalse((self.dir / sched.SCHEDULE_NAME).exists())
         self.assertFalse((self.dir / sched.LOCK_NAME).exists())
+
+    def test_failed_scan_does_not_prune_saved_dates(self):
+        self.touch("A.png")
+        sched.set_entry(self.dir, "A.png", show_from="2026-12-10", remove_after="2026-12-20")
+        before = (self.dir / sched.SCHEDULE_NAME).read_text()
+        with mock.patch.object(Path, "iterdir", side_effect=PermissionError("scan failed")):
+            with self.assertRaises(PermissionError):
+                sched.sync(self.dir)
+        self.assertEqual((self.dir / sched.SCHEDULE_NAME).read_text(), before)
+
+    def test_unreadable_schedule_is_not_overwritten(self):
+        self.touch("A.png")
+        sched.set_entry(self.dir, "A.png", show_from="2026-12-10", remove_after="2026-12-20")
+        before = (self.dir / sched.SCHEDULE_NAME).read_text()
+        with mock.patch.object(Path, "read_text", side_effect=PermissionError("unreadable")):
+            with self.assertRaises(PermissionError):
+                sched.sync(self.dir)
+        self.assertEqual((self.dir / sched.SCHEDULE_NAME).read_text(), before)
+
+    def test_extension_filter_does_not_prune_hidden_files(self):
+        self.touch("A.jpg")
+        sched.set_entry(self.dir, "A.jpg", show_from="2026-12-10", remove_after="2026-12-20")
+        sched.sync(self.dir, (".png",))
+        entry = sched.sync(self.dir)["images"]["A.jpg"]
+        self.assertEqual((entry["show_from"], entry["remove_after"], entry["origin"]), ("2026-12-10", "2026-12-20", "ui"))
+
+    def test_malformed_schedule_is_kept_as_a_backup(self):
+        self.touch("2026-12-01 A.png")
+        (self.dir / sched.SCHEDULE_NAME).write_text("{not json")
+        sched.sync(self.dir)
+        backups = list(self.dir.glob(sched.SCHEDULE_NAME + ".corrupt-*"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_text(), "{not json")
+
+    def test_read_only_folder_still_enforces_the_stored_schedule(self):
+        self.touch("Always.png")
+        self.touch("Future.png")
+        sched.set_entry(self.dir, "Future.png", show_from="2026-12-20")
+        with mock.patch.object(sched, "_lock", side_effect=PermissionError("read-only share")):
+            self.assertEqual(sched.visible_names(self.dir, TODAY), {"Always.png"})
+
+    def test_display_filter_applies_on_a_read_only_share(self):
+        import image_sources
+
+        self.touch("2020-01-01 Old.png")
+        self.touch("Always.png")
+        sched.sync(self.dir)
+        manager = image_sources.ImageSourceManager()
+        manager.config = {"local_files": {"enabled": True, "folder_path": str(self.dir)}}
+        with mock.patch.object(sched, "_lock", side_effect=PermissionError("read-only share")):
+            shown = sorted(Path(i["file_path"]).name for i in manager._fetch_local_images())
+        self.assertEqual(shown, ["Always.png"])
 
     def test_cli_list_reports_states(self):
         self.touch("2026-11-30 Old.png")
