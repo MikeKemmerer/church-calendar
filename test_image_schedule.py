@@ -318,6 +318,45 @@ class ImageScheduleTests(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in (self.dir / "optimized").iterdir()), ["ok.png.webp"])
         self.assertEqual(sorted(p.name for p in (self.dir / "thumbs").iterdir()), ["ok.png.webp"])
 
+    def test_open_inside_checks_the_file_it_actually_opened(self):
+        secret = self.dir / "secret.txt"
+        secret.write_text("private")
+        images = self.dir / "images"
+        images.mkdir()
+        (images / "ok.png").write_bytes(b"poster")
+        (images / "alias.png").symlink_to(images / "ok.png")
+        (images / "out.png").symlink_to(secret)
+        os.mkfifo(images / "pipe.png")
+        with sched.open_inside(images, "ok.png") as f:
+            self.assertEqual(f.read(), b"poster")
+        with sched.open_inside(images, "alias.png") as f:
+            self.assertEqual(f.read(), b"poster")
+        for bad in ("out.png", "pipe.png", "missing.png", "../secret.txt", ".hidden", ""):
+            self.assertIsNone(sched.open_inside(images, bad), bad)
+
+        # The name is swapped for an escaping symlink after any path check and right before the open.
+        real_open = os.open
+
+        def swap_then_open(path, *args, **kwargs):
+            if str(path).endswith("ok.png"):
+                os.replace(images / "out.png", images / "ok.png")
+            return real_open(path, *args, **kwargs)
+
+        with mock.patch.object(sched.os, "open", side_effect=swap_then_open):
+            self.assertIsNone(sched.open_inside(images, "ok.png"))
+
+    def test_image_list_leaves_out_symlinks_that_leave_the_folder(self):
+        import image_sources
+
+        self.touch("ok.png")
+        outside = Path(self.tmp.name + "-outside.png")
+        outside.write_bytes(b"x")
+        self.addCleanup(outside.unlink)
+        (self.dir / "leak.png").symlink_to(outside)
+        manager = image_sources.ImageSourceManager()
+        manager.config = {"local_files": {"enabled": True, "folder_path": str(self.dir)}}
+        self.assertEqual([Path(i["file_path"]).name for i in manager._fetch_local_images()], ["ok.png"])
+
     def test_image_urls_quote_file_names(self):
         import image_sources
 

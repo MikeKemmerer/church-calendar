@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timedelta
 import logging
 import urllib.parse
+from pathlib import Path
 
 import image_schedule
 
@@ -146,10 +147,14 @@ class ImageSourceManager:
         except OSError as e:
             logger.error(f"Could not list local images folder {folder_path}: {e}")
             names = []
+        # Same rule as the image routes: a symlink leading out of the folder is not one of its images.
+        real_folder = Path(os.path.realpath(folder_path))
         files = [
             os.path.join(folder_path, n)
             for n in names
-            if os.path.splitext(n)[1].lower() in wanted_extensions and os.path.isfile(os.path.join(folder_path, n))
+            if os.path.splitext(n)[1].lower() in wanted_extensions
+            and os.path.isfile(os.path.join(folder_path, n))
+            and image_schedule.is_within(Path(os.path.realpath(os.path.join(folder_path, n))), real_folder)
         ]
 
         for file_path in files:

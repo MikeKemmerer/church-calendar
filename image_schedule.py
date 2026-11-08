@@ -21,6 +21,7 @@ import logging
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -350,6 +351,43 @@ def listing(
     for name, entry in sorted(data["images"].items()):
         rows.append({"filename": name, **entry, "state": state_of(entry, today)})
     return rows
+
+
+def is_within(path: Path, folder: Path) -> bool:
+    """True if resolved ``path`` is ``folder`` or below it (Path.is_relative_to needs Python 3.9)."""
+    return path == folder or folder in path.parents
+
+
+def open_inside(folder: Path | str, name: str):
+    """Open ``folder/name`` for binary reading if it is a regular file inside ``folder`` (symlinks too), else None.
+
+    The opened descriptor itself is checked, so swapping the name for an escaping symlink after the
+    check cannot change what is read.
+    """
+    if not name or os.path.basename(name) != name or name.startswith("."):
+        return None
+    path = os.path.join(folder, name)
+    try:
+        base = Path(folder).resolve(strict=True)
+        # Non-blocking, so a FIFO dropped into the folder cannot hang the reader.
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    except (OSError, RuntimeError):
+        return None
+    try:
+        opened = os.fstat(fd)
+        try:
+            real = Path(os.readlink(f"/proc/self/fd/{fd}"))
+            same = True
+        except OSError:  # no /proc: check the resolved path is still the opened file
+            real = Path(os.path.realpath(path))
+            same = os.path.samestat(opened, os.stat(real, follow_symlinks=False))
+        if stat.S_ISREG(opened.st_mode) and same and is_within(real, base):
+            os.set_blocking(fd, True)
+            return os.fdopen(fd, "rb")
+    except OSError:
+        pass
+    os.close(fd)
+    return None
 
 
 def resolve_images_dir(explicit: str | None) -> Path:

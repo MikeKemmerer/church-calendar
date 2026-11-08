@@ -169,21 +169,16 @@ IMAGE_FILE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 FONT_FILE_EXTENSIONS = {".woff2"}
 
 
-def is_within(path, folder):
-    """True if resolved ``path`` is ``folder`` or below it (Path.is_relative_to needs Python 3.9)."""
-    return path == folder or folder in path.parents
-
-
 def file_inside(folder, name):
-    """``folder/name`` if it is a regular file that stays inside ``folder`` (symlinks too), else None."""
-    if not name or os.path.basename(name) != name or name.startswith("."):
+    """``folder/name`` if it is a regular file that stays inside ``folder`` (symlinks too), else None.
+
+    Only a check: anything sent to a client is read through image_schedule.open_inside, which pins the file.
+    """
+    f = image_schedule.open_inside(folder, name)
+    if f is None:
         return None
-    try:
-        base = Path(folder).resolve(strict=True)
-        real = (Path(folder) / name).resolve(strict=True)
-    except (OSError, RuntimeError):
-        return None
-    return Path(folder) / name if is_within(real, base) and real.is_file() else None
+    f.close()
+    return Path(folder) / name
 
 
 # The only app files anyone may fetch; config.json, source, .git, caches and folder listings stay private.
@@ -191,35 +186,37 @@ PUBLIC_FILES = {"/index.html", "/calendar_cache.json"}  # calendar_cache.json fe
 PUBLIC_FOLDERS = {"/fonts/": ("fonts", FONT_FILE_EXTENSIONS), "/images/": ("images", IMAGE_FILE_EXTENSIONS)}
 
 
-def public_static_file(url_path):
-    """The app file a public URL path names, or None."""
+def public_static_location(url_path):
+    """(folder, name) of the app file a public URL path names, or None."""
     path = urllib.parse.unquote(url_path)
     if path in PUBLIC_FILES:
-        return file_inside(APP_DIR, path[1:])
+        return APP_DIR, path[1:]
     for prefix, (folder, extensions) in PUBLIC_FOLDERS.items():
         if path.startswith(prefix):
             name = path[len(prefix):]
             if os.path.splitext(name)[1].lower() not in extensions:
                 return None
-            return file_inside(os.path.join(APP_DIR, folder), name)
+            return os.path.join(APP_DIR, folder), name
     return None
 
 
-def resolve_source_image(name):
-    """The original image ``name`` in the configured folder, or None.
+def public_static_file(url_path):
+    """The app file a public URL path names, or None."""
+    location = public_static_location(url_path)
+    return file_inside(*location) if location else None
 
-    Only bare image file names qualify, and a symlink must not lead outside the folder.
-    """
+
+def source_image_location(name):
+    """(folder, name) of an original image in the configured folder, or None for anything but a bare image name."""
     if not name or os.path.basename(name) != name or os.path.splitext(name)[1].lower() not in IMAGE_FILE_EXTENSIONS:
         return None
-    folder = image_schedule.resolve_images_dir(None)
-    path = folder / name
-    try:
-        real = path.resolve(strict=True)
-        inside = is_within(real, folder.resolve(strict=True))
-    except OSError:
-        return None
-    return path if inside and real.is_file() else None
+    return image_schedule.resolve_images_dir(None), name
+
+
+def resolve_source_image(name):
+    """The original image ``name`` in the configured folder, or None; a symlink must not lead outside the folder."""
+    location = source_image_location(name)
+    return file_inside(*location) if location else None
 
 
 def image_preview_url(name):
@@ -496,24 +493,29 @@ class CalendarHandler(http.server.SimpleHTTPRequestHandler):
         self.serve_public_static("/index.html" if path in ("", "/") else path, head_only=True)
 
     def serve_public_static(self, path, head_only=False):
-        # Send the exact file that was checked; letting the base class re-read the URL could open another.
-        target = public_static_file(path)
-        try:
-            f = open(target, "rb") if target is not None else None
-        except OSError:
-            f = None
+        location = public_static_location(path)
+        self.send_checked_file(location, head_only=head_only)
+
+    def send_checked_file(self, location, content_type=None, cache_control=None, head_only=False):
+        """Send (folder, name) through a descriptor that was checked to be inside folder; 404 otherwise."""
+        f = image_schedule.open_inside(*location) if location else None
         if f is None:
             self.send_error(404, "File not found")
             return
         with f:
-            stat = os.fstat(f.fileno())
+            info = os.fstat(f.fileno())
             self.send_response(200)
-            self.send_header("Content-Type", self.guess_type(str(target)))
-            self.send_header("Content-Length", str(stat.st_size))
-            self.send_header("Last-Modified", self.date_time_string(stat.st_mtime))
+            self.send_header("Content-Type", content_type or self.guess_type(location[1]))
+            self.send_header("Content-Length", str(info.st_size))
+            self.send_header("Last-Modified", self.date_time_string(info.st_mtime))
+            if cache_control:
+                self.send_header("Cache-Control", cache_control)
             self.end_headers()
             if not head_only:
-                shutil.copyfileobj(f, self.wfile)
+                try:
+                    shutil.copyfileobj(f, self.wfile)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass  # the client stopped reading, e.g. a cancelled image load
 
     def list_directory(self, path):
         self.send_error(404, "File not found")
@@ -629,16 +631,8 @@ def main():
             def serve_derivative(self, folder):
                 # Decode before taking the name, so an encoded "../" cannot reach outside the folder.
                 requested_name = os.path.basename(urllib.parse.unquote(self.path.split('?', 1)[0]))
-                derivative = file_inside(os.path.join(APP_DIR, 'images', folder), requested_name)
-                if derivative is None:
-                    self.send_error(404, 'File not found')
-                    return
-                self.send_response(200)
-                self.send_header('Content-type', 'image/webp')
-                self.send_header('Cache-Control', 'public, max-age=86400')
-                self.end_headers()
-                with open(derivative, 'rb') as f:
-                    self.wfile.write(f.read())
+                self.send_checked_file((os.path.join(APP_DIR, 'images', folder), requested_name),
+                                       'image/webp', 'public, max-age=86400')
 
             def do_GET(self):
                 if self.path.startswith('/optimized/'):
@@ -650,16 +644,7 @@ def main():
                 elif self.path.startswith('/source-images/'):
                     # Originals from the configured folder when it is not the app's own images/ folder
                     requested_name = os.path.basename(urllib.parse.unquote(self.path.split('?', 1)[0]))
-                    source = resolve_source_image(requested_name)
-                    if source is None:
-                        self.send_error(404, 'File not found')
-                        return
-                    self.send_response(200)
-                    self.send_header('Content-type', self.guess_type(requested_name))
-                    self.send_header('Cache-Control', 'public, max-age=3600')
-                    self.end_headers()
-                    with open(source, 'rb') as f:
-                        self.wfile.write(f.read())
+                    self.send_checked_file(source_image_location(requested_name), cache_control='public, max-age=3600')
                     return
                 super().do_GET()
 

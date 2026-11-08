@@ -6,6 +6,7 @@ Includes thumbnail generation and orphaned file cleanup
 """
 
 import json
+import io
 import time
 import argparse
 import logging
@@ -13,6 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from PIL import Image
 import hashlib
+
+import image_schedule
 
 try:
     RESAMPLE_LANCZOS = Image.Resampling.LANCZOS
@@ -74,24 +77,12 @@ class ImageOptimizer:
         except Exception as e:
             logger.error(f"Failed to save image cache: {e}")
     
-    def _get_file_hash(self, file_path):
-        """Generate hash of file for change detection"""
-        try:
-            with open(file_path, 'rb') as f:
-                return hashlib.md5(f.read()).hexdigest()
-        except Exception as e:
-            logger.error(f"Failed to hash file {file_path}: {e}")
-            return None
+    def _get_file_hash(self, data):
+        """Generate hash of the image bytes for change detection"""
+        return hashlib.md5(data).hexdigest()
     
-    def _needs_optimization(self, original_path):
+    def _needs_optimization(self, original_path, file_hash):
         """Check if image needs optimization (new or modified)"""
-        if not original_path.exists():
-            return False
-        
-        file_hash = self._get_file_hash(original_path)
-        if not file_hash:
-            return False
-        
         cache_key = str(original_path)
         if cache_key not in self.cache:
             return True
@@ -109,15 +100,13 @@ class ImageOptimizer:
         filename = original_path.name
         return self.thumbnail_dir / f"{filename}.webp"
     
-    def _optimize_single_image(self, image_path):
-        """Optimize a single image if needed"""
+    def _optimize_single_image(self, image_path, data):
+        """Optimize a single image if needed; ``data`` is its content, read once from a checked descriptor"""
         image_path = Path(image_path)
-        
-        if not image_path.exists():
-            return None
+        file_hash = self._get_file_hash(data)
         
         # Check if optimization is needed
-        if not self._needs_optimization(image_path):
+        if not self._needs_optimization(image_path, file_hash):
             optimized_path = self._get_optimized_path(image_path)
             if optimized_path.exists():
                 logger.info(f"Image already optimized: {image_path.name}")
@@ -129,7 +118,7 @@ class ImageOptimizer:
         
         try:
             # Open and optimize image
-            with Image.open(image_path) as img:
+            with Image.open(io.BytesIO(data)) as img:
                 # Convert to RGB if necessary (for WebP)
                 if img.mode not in ('RGB', 'RGBA'):
                     img = img.convert('RGB')
@@ -150,7 +139,6 @@ class ImageOptimizer:
                 img.save(optimized_path, format=self.config["format"], quality=self.config["quality"])
                 
                 # Update cache
-                file_hash = self._get_file_hash(image_path)
                 self.cache[str(image_path)] = {
                     'hash': file_hash,
                     'optimized_path': str(optimized_path),
@@ -253,7 +241,6 @@ class ImageOptimizer:
     def optimize_all_images(self, source_dir=None):
         """Optimize all images in source directory (default: the configured images folder) with thumbnails and cleanup"""
         if source_dir is None:
-            import image_schedule
             source_dir = image_schedule.resolve_images_dir(None)
         source_path = Path(source_dir)
         if not source_path.exists():
@@ -265,23 +252,21 @@ class ImageOptimizer:
         
         logger.info(f"Starting image optimization for {source_dir}/")
         
-        # A symlink leading outside the folder is skipped, so cleanup also removes any derivatives made from it.
-        base = source_path.resolve()
+        # Each image is read once through a descriptor checked to be inside the folder; anything else
+        # (such as a symlink leading out) is skipped, so cleanup also removes derivatives made from it.
         source_files = []
         for image_file in sorted(source_path.iterdir()):
-            if image_file.suffix.lower() not in supported_extensions or not image_file.is_file():
+            if image_file.suffix.lower() not in supported_extensions:
                 continue
-            real = image_file.resolve()
-            if real != base and base not in real.parents:
-                logger.warning(f"Skipping image outside the images folder: {image_file.name}")
+            f = image_schedule.open_inside(source_path, image_file.name)
+            if f is None:
+                logger.warning(f"Skipping image that is not a file inside the images folder: {image_file.name}")
                 continue
-            source_files.append(image_file)
-        
-        # Process all image files
-        for image_file in source_files:
             try:
-                # Optimize the image
-                optimized_path = self._optimize_single_image(image_file)
+                with f:
+                    data = f.read()
+                optimized_path = self._optimize_single_image(image_file, data)
+                source_files.append(image_file)
                 if optimized_path:
                     # Generate thumbnail from optimized image
                     self._generate_thumbnail(optimized_path, image_file)
