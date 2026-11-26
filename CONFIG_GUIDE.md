@@ -6,6 +6,14 @@
 - `elegant-black` - Elegant Black  
 - `liturgical-purple` - Liturgical Purple
 - `festive-red` - Festive Red
+- `light` - Light Mode
+- `thanksgiving` - Thanksgiving (seasonal artwork behind the event cards, plus slowly falling leaves)
+- `winter` - Winter (snowy pines, fir branches and a cardinal behind the event cards, plus falling snow)
+
+Seasonal themes with artwork are available to every client like any other theme: pick one in the
+⚙️ options menu, set it with `?theme=thanksgiving` / `?theme=winter` on the page URL, or push it from
+church-monitoring's calendar settings. The artwork lives in
+`theme-art/` (public-domain Openclipart images; credits in `theme-art/CREDITS.md`).
 
 ## Available Font Combinations
 - `cinzel-lora` - Cinzel + Lora (default)

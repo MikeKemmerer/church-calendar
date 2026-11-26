@@ -299,6 +299,62 @@
             --overlay-color-end: rgba(232, 224, 212, 0.70);
         }
 
+        /* Thanksgiving Theme (enhanced: artwork behind the cards, see .art-thanksgiving) */
+        .theme-thanksgiving {
+            --primary-color: #E08A2E;
+            --primary-light: #F6C98A;
+            --primary-dark: #7A3E12;
+            --secondary-color: #2A1509;
+            --secondary-light: #4A2A14;
+            --text-color: #FBF1E2;
+            --text-muted: #D6B999;
+            --background-start: #2A1509;
+            --background-end: #5A2A12;
+
+            --dropdown-bg: #3A1F0F;
+            --dropdown-border: #E08A2E;
+            --dropdown-text: #FBF1E2;
+            --dropdown-hover-bg: #54301A;
+            --dropdown-hover-text: #FBF1E2;
+            --dropdown-focus-bg: #E08A2E;
+            --dropdown-focus-text: #2A1509;
+
+            --event-card-start: rgba(58, 31, 15, 0.93);
+            --event-card-end: rgba(36, 18, 8, 0.97);
+            --shadow-color: rgba(0, 0, 0, 0.45);
+            --border-color: rgba(224, 138, 46, 0.30);
+            --overlay-color-start: rgba(24, 10, 4, 0.35);
+            --overlay-color-end: rgba(24, 10, 4, 0.70);
+        }
+
+        /* Winter Theme (enhanced: artwork and falling snow behind the cards, see .art-winter) */
+        .theme-winter {
+            --primary-color: #5FA8DC;
+            --primary-light: #D4ECFF;
+            --primary-dark: #1B4670;
+            --secondary-color: #0A1829;
+            --secondary-light: #15304D;
+            --text-color: #F2F8FF;
+            --text-muted: #A9C2DA;
+            --background-start: #0A1829;
+            --background-end: #27507A;
+
+            --dropdown-bg: #10263E;
+            --dropdown-border: #7DB9E6;
+            --dropdown-text: #F2F8FF;
+            --dropdown-hover-bg: #1E3F61;
+            --dropdown-hover-text: #F2F8FF;
+            --dropdown-focus-bg: #7DB9E6;
+            --dropdown-focus-text: #0A1829;
+
+            --event-card-start: rgba(16, 38, 62, 0.93);
+            --event-card-end: rgba(8, 20, 36, 0.97);
+            --shadow-color: rgba(0, 0, 0, 0.45);
+            --border-color: rgba(125, 185, 230, 0.30);
+            --overlay-color-start: rgba(6, 14, 26, 0.35);
+            --overlay-color-end: rgba(6, 14, 26, 0.70);
+        }
+
         /* Full screen optimized for 720p */
         html, body {
             width: 100vw;
@@ -342,6 +398,90 @@
             height: 100%;
             background: radial-gradient(ellipse at center, var(--overlay-color-start) 0%, var(--overlay-color-end) 100%);
             z-index: 1;
+        }
+
+        /* Enhanced theme art: one fixed layer above the overlay (z-index 1) and below the page (z-index 10),
+           so artwork always sits behind the header and event cards. Hidden unless its theme is active. */
+        .theme-art {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            display: none;
+        }
+        .theme-thanksgiving .art-thanksgiving,
+        .theme-winter .art-winter {
+            display: block;
+        }
+
+        /* Thanksgiving layout. Sizes are in vw so the scene scales with the screen; the art hugs the corners and
+           edges and the cards cover the middle. */
+        .art-thanksgiving .tg {
+            position: absolute;
+            height: auto;
+            user-select: none;
+        }
+        .tg-branch     { width: 23vw; left: -3vw;  top: -2.5vw; transform: rotate(-4deg); opacity: 0.95; }
+        /* The six maple leaves are crops of one sheet (maple-leaves.png, 761x666), each placed and rotated on its own so
+           they look scattered rather than in a grid. background-size/position percentages come from each leaf's crop box. */
+        .art-thanksgiving .tg-maple {
+            position: absolute;
+            background-image: url('/theme-art/maple-leaves.png');
+            background-repeat: no-repeat;
+            opacity: 0.95;
+        }
+        .tg-maple-1 { width: 6.0vw; aspect-ratio: 220 / 275; background-size: 345.9% auto; background-position: 1.85% 5.1%;
+                      right: 15.5vw; top: 6.4vw; transform: rotate(-28deg); }
+        .tg-maple-2 { width: 7.0vw; aspect-ratio: 234 / 325; background-size: 325.2% auto; background-position: 46.1% 0%;
+                      right: 8.8vw; top: -2.4vw; transform: rotate(23deg); }
+        .tg-maple-3 { width: 8.2vw; aspect-ratio: 270 / 332; background-size: 281.9% auto; background-position: 97.1% 0%;
+                      right: -1.4vw; top: 0.6vw; transform: rotate(38deg); }
+        .tg-maple-4 { width: 6.6vw; aspect-ratio: 272 / 328; background-size: 279.8% auto; background-position: 0% 100%;
+                      right: 4vw; top: 9.4vw; transform: rotate(-57deg); }
+        .tg-maple-5 { width: 5.2vw; aspect-ratio: 234 / 322; background-size: 325.2% auto; background-position: 51.6% 98.3%;
+                      right: 12vw; top: 13.2vw; transform: rotate(142deg); }
+        .tg-maple-6 { width: 6.0vw; aspect-ratio: 255 / 310; background-size: 298.4% auto; background-position: 100% 94.9%;
+                      right: 21vw; top: -1.6vw; transform: rotate(74deg); }
+        .tg-sheaf      { width: 12vw; left: -1vw;  bottom: -1.5vw; }
+        .tg-pumpkin-a  { width: 8.5vw; left: 10vw; bottom: -1vw; }
+        .tg-pumpkin-b  { width: 7vw;   left: 17vw; bottom: -1.2vw; }
+        .tg-cornucopia { width: 25vw; right: -1.5vw; bottom: -2vw; }
+        .tg-acorn      { width: 4vw;   right: 24vw; bottom: -0.2vw; transform: rotate(14deg); }
+        .tg-wheat      { width: 6vw;   right: 22vw; bottom: -2vw; transform: rotate(-8deg); }
+
+        /* Winter layout, same approach: snowy pines in the bottom corners, fir branches and a cardinal up top. */
+        .art-winter .wt {
+            position: absolute;
+            height: auto;
+            user-select: none;
+        }
+        .wt-branch-l   { width: 24vw; left: -2vw;  top: -2vw; transform: scaleX(-1) rotate(8deg); opacity: 0.95; }
+        .wt-branch-r   { width: 21vw; right: -2vw; top: -1vw; transform: rotate(-4deg); opacity: 0.95; }
+        .wt-cardinal   { width: 5.5vw; right: 14vw; top: 4.4vw; }
+        .wt-pine-a     { width: 11vw; left: -1vw;  bottom: -1vw; }
+        .wt-pine-b     { width: 8vw;  left: 8.5vw; bottom: -1.2vw; }
+        .wt-pine-c     { width: 6vw;  left: 14.5vw; bottom: -1vw; }
+        .wt-pine-d     { width: 12vw; right: -1vw; bottom: -1.2vw; }
+        .wt-pine-e     { width: 8.5vw; right: 10vw; bottom: -1vw; }
+        .wt-pine-f     { width: 6vw;  right: 16.5vw; bottom: -1.2vw; }
+        .wt-flake-lg   { width: 9vw; right: 24vw; top: 7vw; opacity: 0.12; }
+        .wt-flake-lg-2 { width: 7vw; left: 26vw; bottom: 9vw; opacity: 0.1; }
+        .falling-particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        .falling-particles img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            will-change: transform;
         }
 
         /* Page layout: full screen optimized for 720p */
@@ -966,6 +1106,41 @@
     <div class="gradient-background"></div>
     <div class="overlay"></div>
 
+    <!-- Thanksgiving artwork: public-domain (CC0) clip art from Openclipart, credited in theme-art/CREDITS.md.
+         Sits in a layer behind the header and event cards; the leaves are animated by startFalling('thanksgiving'). -->
+    <div class="theme-art art-thanksgiving" aria-hidden="true">
+        <img class="tg tg-branch" src="/theme-art/leaf-branch.png" alt="">
+        <div class="tg-maple tg-maple-1"></div>
+        <div class="tg-maple tg-maple-2"></div>
+        <div class="tg-maple tg-maple-3"></div>
+        <div class="tg-maple tg-maple-4"></div>
+        <div class="tg-maple tg-maple-5"></div>
+        <div class="tg-maple tg-maple-6"></div>
+        <img class="tg tg-sheaf" src="/theme-art/wheat-sheaf.png" alt="">
+        <img class="tg tg-pumpkin-a" src="/theme-art/pumpkin-orange.png" alt="">
+        <img class="tg tg-pumpkin-b" src="/theme-art/pumpkin-glossy.png" alt="">
+        <img class="tg tg-cornucopia" src="/theme-art/cornucopia.png" alt="">
+        <img class="tg tg-acorn" src="/theme-art/acorn.png" alt="">
+        <img class="tg tg-wheat" src="/theme-art/wheat-ears.png" alt="">
+        <div class="falling-particles" id="fallingLeaves"></div>
+    </div>
+
+    <!-- Winter artwork: same public-domain Openclipart sourcing and layering; the snow is animated by startFalling('winter'). -->
+    <div class="theme-art art-winter" aria-hidden="true">
+        <img class="wt wt-flake-lg" src="/theme-art/snowflake-large.png" alt="">
+        <img class="wt wt-flake-lg-2" src="/theme-art/snowflake-large.png" alt="">
+        <img class="wt wt-branch-l" src="/theme-art/fir-branch.png" alt="">
+        <img class="wt wt-branch-r" src="/theme-art/fir-branch.png" alt="">
+        <img class="wt wt-cardinal" src="/theme-art/cardinal.png" alt="">
+        <img class="wt wt-pine-c" src="/theme-art/snowy-pine.png" alt="">
+        <img class="wt wt-pine-b" src="/theme-art/snowy-pine.png" alt="">
+        <img class="wt wt-pine-a" src="/theme-art/snowy-pine.png" alt="">
+        <img class="wt wt-pine-f" src="/theme-art/snowy-pine.png" alt="">
+        <img class="wt wt-pine-e" src="/theme-art/snowy-pine.png" alt="">
+        <img class="wt wt-pine-d" src="/theme-art/snowy-pine.png" alt="">
+        <div class="falling-particles" id="fallingSnow"></div>
+    </div>
+
     <div class="page">
         <header class="header">
             <h1 id="siteTitle"></h1>
@@ -992,6 +1167,10 @@
                         <option value="liturgical-purple">Liturgical Purple</option>
                         <option value="festive-red">Festive Red</option>
                         <option value="light">Light Mode</option>
+                        <optgroup label="Seasonal (artwork)">
+                            <option value="thanksgiving">Thanksgiving</option>
+                            <option value="winter">Winter (falling snow)</option>
+                        </optgroup>
                     </select>
                 </div>
                 
@@ -1428,11 +1607,109 @@
             }, 500);
         }
 
+        // Falling-art themes: a few images drift down behind the cards. Plain transforms on a handful of images,
+        // updated about 20 times a second, which is cheap enough for the Pi Zero 2W. Each range is [small/slow, large/fast];
+        // a particle's random depth picks its size, speed and sway together, so small flakes drift slower.
+        const FALL_FPS = 20;
+        const FALL_EFFECTS = {
+            thanksgiving: {
+                box: 'fallingLeaves', src: '/theme-art/leaf-red.png', count: 9,
+                size: [26, 52], opacity: [0.75, 0.95], speed: [22, 48], sway: [18, 58], swayRate: [0.6, 1.4], spin: [15, 55],
+                looks: ['none', 'hue-rotate(20deg) saturate(1.15)', 'hue-rotate(38deg) brightness(1.1)']
+            },
+            winter: {
+                box: 'fallingSnow', src: '/theme-art/snowflake.png', count: 28,
+                size: [7, 22], opacity: [0.5, 0.95], speed: [22, 58], sway: [8, 30], swayRate: [0.4, 1.0], spin: [8, 30],
+                looks: ['none']
+            }
+        };
+        let fallTimer = null;
+        let fallEffect = null;
+        let fallState = [];
+        let fallLastTick = 0;
+
+        function lerp(range, t) {
+            return range[0] + (range[1] - range[0]) * t;
+        }
+
+        function resetParticle(p, startAnywhere) {
+            const fx = fallEffect;
+            const t = p.depth;
+            p.x = Math.random() * window.innerWidth;
+            p.y = startAnywhere ? Math.random() * window.innerHeight : -80 - Math.random() * 160;
+            p.speed = lerp(fx.speed, t) * (0.9 + Math.random() * 0.2);
+            p.sway = lerp(fx.sway, t);
+            p.swayRate = lerp(fx.swayRate, Math.random());
+            p.phase = Math.random() * Math.PI * 2;
+            p.angle = Math.random() * 360;
+            p.spin = (Math.random() < 0.5 ? -1 : 1) * lerp(fx.spin, Math.random());
+        }
+
+        function startFalling(theme) {
+            const fx = FALL_EFFECTS[theme];
+            if (fallEffect === fx) return;
+            stopFalling();
+            const box = fx && document.getElementById(fx.box);
+            if (!box) return;
+            fallEffect = fx;
+            for (let i = 0; i < fx.count; i++) {
+                const depth = Math.random();
+                const el = document.createElement('img');
+                el.src = fx.src;
+                el.alt = '';
+                el.style.width = lerp(fx.size, depth).toFixed(1) + 'px';
+                el.style.filter = fx.looks[i % fx.looks.length];
+                el.style.opacity = lerp(fx.opacity, Math.random()).toFixed(2);
+                box.appendChild(el);
+                const p = { el: el, depth: depth };
+                resetParticle(p, true);
+                fallState.push(p);
+            }
+            fallLastTick = performance.now();
+            fallTimer = setInterval(stepFalling, 1000 / FALL_FPS);
+        }
+
+        function stepFalling() {
+            const now = performance.now();
+            const dt = Math.min((now - fallLastTick) / 1000, 0.25);
+            fallLastTick = now;
+            for (const p of fallState) {
+                p.y += p.speed * dt;
+                p.phase += p.swayRate * dt;
+                p.angle += p.spin * dt;
+                if (p.y > window.innerHeight + 60) resetParticle(p, false);
+                const x = p.x + Math.sin(p.phase) * p.sway;
+                p.el.style.transform = 'translate3d(' + x.toFixed(1) + 'px,' + p.y.toFixed(1) + 'px,0) rotate(' + p.angle.toFixed(1) + 'deg)';
+            }
+        }
+
+        function stopFalling() {
+            if (fallTimer) {
+                clearInterval(fallTimer);
+                fallTimer = null;
+            }
+            if (fallEffect) {
+                const box = document.getElementById(fallEffect.box);
+                if (box) box.innerHTML = '';
+            }
+            fallEffect = null;
+            fallState = [];
+        }
+
         function applyThemeClass(theme) {
-            document.body.classList.remove('theme-modern-blue', 'theme-elegant-black', 'theme-liturgical-purple', 'theme-festive-red', 'theme-light');
+            document.body.classList.remove('theme-modern-blue', 'theme-elegant-black', 'theme-liturgical-purple', 'theme-festive-red', 'theme-light', 'theme-thanksgiving', 'theme-winter');
+            if (FALL_EFFECTS[theme]) {
+                startFalling(theme);
+            } else {
+                stopFalling();
+            }
 
             if (theme === 'modern-blue') {
                 document.body.classList.add('theme-modern-blue');
+            } else if (theme === 'winter') {
+                document.body.classList.add('theme-winter');
+            } else if (theme === 'thanksgiving') {
+                document.body.classList.add('theme-thanksgiving');
             } else if (theme === 'elegant-black') {
                 document.body.classList.add('theme-elegant-black');
             } else if (theme === 'liturgical-purple') {
@@ -1462,7 +1739,7 @@
         // for days is only known after /api/branding loads, so it is enforced there.
         function applyUrlParamOverrides() {
             const params = new URLSearchParams(window.location.search);
-            const ALLOWED_THEMES = ['classic-gold', 'modern-blue', 'elegant-black', 'liturgical-purple', 'festive-red', 'light'];
+            const ALLOWED_THEMES = ['classic-gold', 'modern-blue', 'elegant-black', 'liturgical-purple', 'festive-red', 'light', 'thanksgiving', 'winter'];
             const ALLOWED_FONTS = ['cinzel-lora', 'roboto-open-sans', 'playfair-source'];
             const ALLOWED_SPEEDS = ['12', '18'];
             let applied = false;
@@ -1665,6 +1942,7 @@
 
             resetBtn.addEventListener('click', () => {
                 document.body.className = '';
+                stopFalling();
                 themeSelect.value = 'classic-gold';
                 fontSelect.value = 'cinzel-lora';
                 
