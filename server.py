@@ -183,7 +183,8 @@ def file_inside(folder, name):
 
 # The only app files anyone may fetch; config.json, source, .git, caches and folder listings stay private.
 PUBLIC_FILES = {"/index.html", "/calendar_cache.json"}  # calendar_cache.json feeds LiveStreamScheduler
-PUBLIC_FOLDERS = {"/fonts/": ("fonts", FONT_FILE_EXTENSIONS), "/images/": ("images", IMAGE_FILE_EXTENSIONS)}
+PUBLIC_FOLDERS = {"/fonts/": ("fonts", FONT_FILE_EXTENSIONS), "/images/": ("images", IMAGE_FILE_EXTENSIONS),
+                  "/theme-art/": ("theme-art", {".png"})}  # clip art for the enhanced themes
 
 
 def public_static_location(url_path):

@@ -389,6 +389,13 @@ The calendar supports 5 professional themes:
 4. **Liturgical Purple** - Liturgical purple with dark background
 5. **Festive Red** - Red theme for special occasions
 
+Seasonal themes add artwork behind the event cards (images in `theme-art/`, JavaScript-only animation):
+
+- **Thanksgiving** - Autumn palette, cornucopia, pumpkins, wheat and falling leaves
+  (`?theme=thanksgiving`)
+- **Winter** - Icy blue palette, snowy pines, fir branches, a cardinal and falling snow
+  (`?theme=winter`)
+
 ### Theme Features
 - WCAG AA compliant color contrast ratios
 - Theme-aware CSS variables for consistent styling

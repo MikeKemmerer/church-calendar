@@ -129,14 +129,16 @@ class BrandingAndVersionTests(unittest.TestCase):
         self.assertEqual(server.resolve_source_image("alias.png"), self.configured / "alias.png")
 
     def test_public_static_files_are_an_allowlist(self):
-        for folder in ("fonts", "images", "images/archive"):
+        for folder in ("fonts", "images", "images/archive", "theme-art"):
             (self.dir / folder).mkdir(parents=True, exist_ok=True)
         for name in ("index.html", "calendar_cache.json", "config.json", "server.py", "fonts/a.woff2",
-                     "images/poster.png", "images/image-schedule.json", "images/archive/old.png"):
+                     "images/poster.png", "images/image-schedule.json", "images/archive/old.png",
+                     "theme-art/leaf.png", "theme-art/CREDITS.md"):
             (self.dir / name).write_text("x")
         (self.dir / "images" / "sneaky.png").symlink_to(self.dir / "config.json")
-        allowed = ["/index.html", "/calendar_cache.json", "/fonts/a.woff2", "/images/poster.png", "/images/poster%2Epng"]
-        refused = ["/config.json", "/server.py", "/.git/HEAD", "/images/", "/images/archive/old.png",
+        allowed = ["/index.html", "/calendar_cache.json", "/fonts/a.woff2", "/images/poster.png", "/images/poster%2Epng",
+                   "/theme-art/leaf.png"]
+        refused = ["/config.json", "/server.py", "/.git/HEAD", "/images/", "/images/archive/old.png", "/theme-art/CREDITS.md",
                    "/images/image-schedule.json", "/images/sneaky.png", "/fonts/", "/images/..%2Fconfig.json",
                    "/images/%2e%2e%2fserver.py", "/fonts/../config.json", "/images/missing.png"]
         for path in allowed:
